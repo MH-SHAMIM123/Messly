@@ -21,6 +21,21 @@ public class DepositRepository(MesslyDbContext context) : Repository<Deposit>(co
             .OrderByDescending(d => d.DepositDate)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Deposit>> GetByFlatAndMonthAsync(
+        Guid flatId,
+        int year,
+        int month,
+        CancellationToken cancellationToken = default)
+    {
+        var start = new DateOnly(year, month, 1);
+        var end = start.AddMonths(1).AddDays(-1);
+
+        return await DbSet
+            .AsNoTracking()
+            .Where(d => d.FlatId == flatId && d.DepositDate >= start && d.DepositDate <= end)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<decimal> GetTotalByFlatAndMonthAsync(Guid flatId, int year, int month, CancellationToken cancellationToken = default)
     {
         var start = new DateOnly(year, month, 1);

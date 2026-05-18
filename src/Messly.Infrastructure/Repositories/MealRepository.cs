@@ -14,6 +14,11 @@ public class MealRepository(MesslyDbContext context) : Repository<Meal>(context)
             .Where(m => m.FlatId == flatId && m.MealDate == date)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Meal>> GetByFlatAndDateForUpdateAsync(Guid flatId, DateOnly date, CancellationToken cancellationToken = default)
+        => await DbSet
+            .Where(m => m.FlatId == flatId && m.MealDate == date)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<Meal>> GetByFlatAndMonthAsync(Guid flatId, int year, int month, CancellationToken cancellationToken = default)
     {
         var start = new DateOnly(year, month, 1);

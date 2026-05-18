@@ -13,61 +13,57 @@ public class BillingCalculationService(
     IRepository<MonthlySummary> monthlySummaryRepository,
     IUnitOfWork unitOfWork) : IBillingCalculationService
 {
-    public async Task<decimal> CalculateMealRateAsync(Guid flatId, int year, int month, CancellationToken cancellationToken = default)
+    public async Task<decimal> CalculateMealRateAsync(
+        Guid flatId,
+        int year,
+        int month,
+        CancellationToken cancellationToken = default)
     {
         var totalExpenses = await expenseRepository.GetTotalByFlatAndMonthAsync(flatId, year, month, cancellationToken);
         var meals = await mealRepository.GetByFlatAndMonthAsync(flatId, year, month, cancellationToken);
         var totalMeals = meals.Sum(m => m.TotalMealCount);
 
-        if (totalMeals == 0) return 0;
+        if (totalMeals <= 0)
+            return 0;
+
         return Math.Round(totalExpenses / totalMeals, 2, MidpointRounding.AwayFromZero);
     }
 
-    public async Task<IReadOnlyList<MemberBalanceDto>> GetMemberBalancesAsync(Guid flatId, int year, int month, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<MemberBalanceDto>> GetMemberBalancesAsync(
+        Guid flatId,
+        int year,
+        int month,
+        CancellationToken cancellationToken = default)
     {
         var mealRate = await CalculateMealRateAsync(flatId, year, month, cancellationToken);
         var members = await memberRepository.GetByFlatIdAsync(flatId, cancellationToken);
         var meals = await mealRepository.GetByFlatAndMonthAsync(flatId, year, month, cancellationToken);
-        var deposits = await depositRepository.GetByFlatIdAsync(flatId, cancellationToken);
+        var deposits = await depositRepository.GetByFlatAndMonthAsync(flatId, year, month, cancellationToken);
 
-        var start = new DateOnly(year, month, 1);
-        var end = start.AddMonths(1).AddDays(-1);
-
-        return members
-            .Where(m => m.IsActive)
-            .Select(m =>
-            {
-                var memberMeals = meals.Where(x => x.UserId == m.UserId).Sum(x => x.TotalMealCount);
-                var mealCost = Math.Round(memberMeals * mealRate, 2, MidpointRounding.AwayFromZero);
-                var memberDeposits = deposits
-                    .Where(d => d.UserId == m.UserId && d.DepositDate >= start && d.DepositDate <= end)
-                    .Sum(d => d.Amount);
-
-                return new MemberBalanceDto
-                {
-                    UserId = m.UserId,
-                    MemberName = m.User?.FullName ?? string.Empty,
-                    TotalMeals = memberMeals,
-                    MealCost = mealCost,
-                    TotalDeposits = memberDeposits,
-                    Balance = Math.Round(memberDeposits - mealCost, 2, MidpointRounding.AwayFromZero)
-                };
-            })
-            .OrderBy(b => b.MemberName)
-            .ToList();
+        return BuildMemberBalances(members, meals, deposits, mealRate);
     }
 
-    public async Task<MonthlySummaryDto> BuildFinancialSummaryAsync(Guid flatId, int year, int month, CancellationToken cancellationToken = default)
+    public async Task<MonthlySummaryDto> BuildFinancialSummaryAsync(
+        Guid flatId,
+        int year,
+        int month,
+        CancellationToken cancellationToken = default)
     {
         var members = await memberRepository.GetByFlatIdAsync(flatId, cancellationToken);
         var meals = await mealRepository.GetByFlatAndMonthAsync(flatId, year, month, cancellationToken);
+        var deposits = await depositRepository.GetByFlatAndMonthAsync(flatId, year, month, cancellationToken);
         var totalExpenses = await expenseRepository.GetTotalByFlatAndMonthAsync(flatId, year, month, cancellationToken);
-        var totalDeposits = await depositRepository.GetTotalByFlatAndMonthAsync(flatId, year, month, cancellationToken);
-        var mealRate = await CalculateMealRateAsync(flatId, year, month, cancellationToken);
+        var totalDeposits = deposits.Sum(d => d.Amount);
         var totalMeals = meals.Sum(m => m.TotalMealCount);
+        var hasMeals = totalMeals > 0;
+        var hasExpenses = totalExpenses > 0;
+        var mealRate = hasMeals
+            ? Math.Round(totalExpenses / totalMeals, 2, MidpointRounding.AwayFromZero)
+            : 0;
 
         var stored = (await monthlySummaryRepository.FindAsync(
-            s => s.FlatId == flatId && s.Year == year && s.Month == month, cancellationToken)).FirstOrDefault();
+            s => s.FlatId == flatId && s.Year == year && s.Month == month,
+            cancellationToken)).FirstOrDefault();
 
         return new MonthlySummaryDto
         {
@@ -79,15 +75,24 @@ public class BillingCalculationService(
             TotalDeposits = totalDeposits,
             MealRate = mealRate,
             NetBalance = Math.Round(totalDeposits - totalExpenses, 2, MidpointRounding.AwayFromZero),
-            IsFinalized = stored?.IsFinalized ?? false
+            IsFinalized = stored?.IsFinalized ?? false,
+            HasMeals = hasMeals,
+            HasExpenses = hasExpenses,
+            CalculationNote = BuildCalculationNote(hasMeals, hasExpenses),
+            MemberBalances = BuildMemberBalances(members, meals, deposits, mealRate)
         };
     }
 
-    public async Task GenerateMonthlySummaryAsync(Guid flatId, int year, int month, CancellationToken cancellationToken = default)
+    public async Task GenerateMonthlySummaryAsync(
+        Guid flatId,
+        int year,
+        int month,
+        CancellationToken cancellationToken = default)
     {
         var summary = await BuildFinancialSummaryAsync(flatId, year, month, cancellationToken);
         var existing = (await monthlySummaryRepository.FindAsync(
-            s => s.FlatId == flatId && s.Year == year && s.Month == month, cancellationToken)).FirstOrDefault();
+            s => s.FlatId == flatId && s.Year == year && s.Month == month,
+            cancellationToken)).FirstOrDefault();
 
         if (existing is null)
         {
@@ -121,5 +126,51 @@ public class BillingCalculationService(
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    private static IReadOnlyList<MemberBalanceDto> BuildMemberBalances(
+        IReadOnlyList<FlatMember> members,
+        IReadOnlyList<Meal> meals,
+        IReadOnlyList<Deposit> deposits,
+        decimal mealRate)
+    {
+        var mealsByUser = meals.GroupBy(m => m.UserId).ToDictionary(g => g.Key, g => g.Sum(x => x.TotalMealCount));
+        var depositsByUser = deposits.GroupBy(d => d.UserId).ToDictionary(g => g.Key, g => g.Sum(x => x.Amount));
+
+        return members
+            .Where(m => m.IsActive)
+            .Select(m =>
+            {
+                mealsByUser.TryGetValue(m.UserId, out var totalMeals);
+                depositsByUser.TryGetValue(m.UserId, out var totalDeposits);
+                var mealCost = Math.Round(totalMeals * mealRate, 2, MidpointRounding.AwayFromZero);
+                var balance = Math.Round(totalDeposits - mealCost, 2, MidpointRounding.AwayFromZero);
+
+                return new MemberBalanceDto
+                {
+                    UserId = m.UserId,
+                    MemberName = m.User?.FullName ?? string.Empty,
+                    TotalMeals = totalMeals,
+                    MealCost = mealCost,
+                    TotalDeposits = totalDeposits,
+                    Balance = balance
+                };
+            })
+            .OrderBy(b => b.MemberName)
+            .ToList();
+    }
+
+    private static string? BuildCalculationNote(bool hasMeals, bool hasExpenses)
+    {
+        if (!hasMeals && !hasExpenses)
+            return "No expenses or meals recorded for this month. Meal rate is 0.";
+
+        if (!hasMeals)
+            return "No meals recorded for this month. Meal rate is 0 (expenses cannot be allocated).";
+
+        if (!hasExpenses)
+            return "No expenses recorded for this month. Meal rate is 0.";
+
+        return null;
     }
 }

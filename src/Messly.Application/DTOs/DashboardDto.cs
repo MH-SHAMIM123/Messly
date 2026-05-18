@@ -20,6 +20,10 @@ public class MonthlySummaryDto
     public decimal MealRate { get; set; }
     public decimal NetBalance { get; set; }
     public bool IsFinalized { get; set; }
+    public bool HasMeals { get; set; }
+    public bool HasExpenses { get; set; }
+    public string? CalculationNote { get; set; }
+    public IReadOnlyList<MemberBalanceDto> MemberBalances { get; set; } = [];
 }
 
 public class MemberBalanceDto

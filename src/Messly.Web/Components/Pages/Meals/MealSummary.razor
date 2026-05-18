@@ -4,6 +4,7 @@
 @inject FlatContextService FlatContext
 
 <PageHeader Title="Meal Summary" Subtitle="Monthly meal totals per member" />
+<AlertMessage Message="@_error" />
 
 <div class="tabs">
     <a href="/meals/entry">Daily Entry</a>
@@ -17,14 +18,14 @@
     </div>
 </div>
 
-<DataTable ColumnCount="5" IsLoading="@_loading" IsEmpty="@(_rows.Count == 0)" EmptyMessage="No meal data for this month.">
+<DataTable ColumnCount="5" IsLoading="@_loading" IsEmpty="@(_rows.Count == 0)" EmptyMessage="No active members for this flat.">
     <HeadContent>
         <th>Member</th><th>Breakfast</th><th>Lunch</th><th>Dinner</th><th>Total</th>
     </HeadContent>
     <BodyContent>
         @foreach (var row in _rows)
         {
-            <tr>
+            <tr @key="row.UserId">
                 <td>@row.MemberName</td>
                 <td>@row.TotalBreakfast</td>
                 <td>@row.TotalLunch</td>
@@ -39,6 +40,7 @@
     private List<MealSummaryDto> _rows = [];
     private string _monthValue = DateTime.Today.ToString("yyyy-MM");
     private bool _loading = true;
+    private string? _error;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -51,10 +53,18 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        if (DateOnly.TryParse(_monthValue + "-01", out var first))
+        _error = null;
+        try
         {
-            _rows = (await MealService.GetMealTotalsByMonthAsync(FlatContext.CurrentFlatId, first.Year, first.Month)).ToList();
+            if (DateOnly.TryParse(_monthValue + "-01", out var first))
+            {
+                _rows = (await MealService.GetMealTotalsByMonthAsync(
+                    FlatContext.CurrentFlatId,
+                    first.Year,
+                    first.Month)).ToList();
+            }
         }
-        _loading = false;
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
     }
 }
