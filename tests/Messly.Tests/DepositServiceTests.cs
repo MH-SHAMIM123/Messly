@@ -1,7 +1,10 @@
 using Messly.Application.DTOs;
+using Messly.Application.Interfaces.Security;
 using Messly.Application.Services;
+using Messly.Application.Services.Security;
 using Messly.Application.Validators;
 using Messly.Domain.Entities;
+using Messly.Domain.Enums;
 using Messly.Infrastructure.Data;
 using Messly.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -13,16 +16,15 @@ public class DepositServiceTests
     [Fact]
     public async Task CreateDepositAsync_AppearsInList()
     {
-        var (service, db, flatId, userId) = await CreateServiceAsync();
+        var (service, db, _, userId) = await CreateServiceAsync();
         var id = await service.CreateDepositAsync(new DepositUpsertDto
         {
-            FlatId = flatId,
             UserId = userId,
             Amount = 1500,
             DepositDate = new DateOnly(2026, 5, 12)
         });
 
-        var list = await service.GetDepositsAsync(flatId);
+        var list = await service.GetDepositsAsync();
         Assert.Contains(list, d => d.Id == id && d.Amount == 1500);
         await db.DisposeAsync();
     }
@@ -30,10 +32,9 @@ public class DepositServiceTests
     [Fact]
     public async Task UpdateDepositAsync_UpdatesAmount()
     {
-        var (service, db, flatId, userId) = await CreateServiceAsync();
+        var (service, db, _, userId) = await CreateServiceAsync();
         var id = await service.CreateDepositAsync(new DepositUpsertDto
         {
-            FlatId = flatId,
             UserId = userId,
             Amount = 1000,
             DepositDate = DateOnly.FromDateTime(DateTime.Today)
@@ -42,7 +43,6 @@ public class DepositServiceTests
         await service.UpdateDepositAsync(new DepositUpsertDto
         {
             Id = id,
-            FlatId = flatId,
             UserId = userId,
             Amount = 2000,
             DepositDate = DateOnly.FromDateTime(DateTime.Today)
@@ -56,17 +56,16 @@ public class DepositServiceTests
     [Fact]
     public async Task DeleteDepositAsync_SoftDeletes()
     {
-        var (service, db, flatId, userId) = await CreateServiceAsync();
+        var (service, db, _, userId) = await CreateServiceAsync();
         var id = await service.CreateDepositAsync(new DepositUpsertDto
         {
-            FlatId = flatId,
             UserId = userId,
             Amount = 500,
             DepositDate = DateOnly.FromDateTime(DateTime.Today)
         });
 
         await service.DeleteDepositAsync(id);
-        var list = await service.GetDepositsAsync(flatId);
+        var list = await service.GetDepositsAsync();
         Assert.DoesNotContain(list, d => d.Id == id);
         await db.DisposeAsync();
     }
@@ -79,15 +78,31 @@ public class DepositServiceTests
         var db = new MesslyDbContext(options);
         var flatId = Guid.NewGuid();
         var userId = Guid.NewGuid();
+        var managerRoleId = Guid.NewGuid();
 
         db.AppUsers.Add(new User { Id = userId, FullName = "Member", Email = "m@test.com", CreatedAt = DateTime.UtcNow });
+        db.AppRoles.Add(new Role { Id = managerRoleId, Name = "Manager", RoleType = RoleType.Manager, CreatedAt = DateTime.UtcNow });
         db.Flats.Add(new Flat { Id = flatId, Name = "Flat", CreatorId = userId, CreatedAt = DateTime.UtcNow });
+        db.FlatMembers.Add(new FlatMember
+        {
+            Id = Guid.NewGuid(),
+            FlatId = flatId,
+            UserId = userId,
+            RoleId = managerRoleId,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        });
         await db.SaveChangesAsync();
+
+        var memberRepo = new FlatMemberRepository(db);
+        ITenantContext tenant = new TestTenantContext(flatId, RoleType.Manager, userId);
+        var auth = new FlatAuthorizationService(tenant, memberRepo);
 
         var service = new DepositService(
             new DepositRepository(db),
             new UnitOfWork(db),
-            new DepositUpsertDtoValidator());
+            new DepositUpsertDtoValidator(),
+            auth);
 
         return (service, db, flatId, userId);
     }

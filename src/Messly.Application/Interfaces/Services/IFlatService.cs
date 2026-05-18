@@ -4,6 +4,6 @@ namespace Messly.Application.Interfaces.Services;
 
 public interface IFlatService
 {
-    Task<FlatDto?> GetFlatSettingsAsync(Guid flatId, CancellationToken cancellationToken = default);
+    Task<FlatDto?> GetFlatSettingsAsync(CancellationToken cancellationToken = default);
     Task SaveFlatSettingsAsync(FlatDto dto, CancellationToken cancellationToken = default);
 }

@@ -1,17 +1,23 @@
 using Messly.Application.Common;
 using Messly.Application.DTOs;
 using Messly.Application.Interfaces.Persistence;
+using Messly.Application.Interfaces.Security;
 using Messly.Application.Interfaces.Services;
-using Messly.Domain.Entities;
 
 namespace Messly.Application.Services;
 
-public class FlatService(IRepository<Flat> flatRepository, IUnitOfWork unitOfWork) : IFlatService
+public class FlatService(
+    IRepository<Domain.Entities.Flat> flatRepository,
+    IUnitOfWork unitOfWork,
+    IFlatAuthorizationService authorization) : IFlatService
 {
-    public async Task<FlatDto?> GetFlatSettingsAsync(Guid flatId, CancellationToken cancellationToken = default)
+    public async Task<FlatDto?> GetFlatSettingsAsync(CancellationToken cancellationToken = default)
     {
+        authorization.EnsureCanRead();
+        var flatId = authorization.GetCurrentFlatId();
         var flat = await flatRepository.GetByIdAsync(flatId, cancellationToken);
-        if (flat is null) return null;
+        if (flat is null || flat.Id != flatId)
+            return null;
 
         return new FlatDto
         {
@@ -26,8 +32,14 @@ public class FlatService(IRepository<Flat> flatRepository, IUnitOfWork unitOfWor
 
     public async Task SaveFlatSettingsAsync(FlatDto dto, CancellationToken cancellationToken = default)
     {
-        var flat = await flatRepository.GetByIdForUpdateAsync(dto.Id, cancellationToken)
-            ?? throw new BusinessException("Flat not found.");
+        authorization.EnsureManager();
+        var flatId = authorization.GetCurrentFlatId();
+
+        if (dto.Id != flatId)
+            throw new ForbiddenException();
+
+        var flat = await flatRepository.GetByIdForUpdateAsync(flatId, cancellationToken)
+            ?? throw new NotFoundException();
 
         flat.Name = dto.Name.Trim();
         flat.Address = dto.Address?.Trim();

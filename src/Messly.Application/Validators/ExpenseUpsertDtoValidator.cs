@@ -9,7 +9,6 @@ public class ExpenseUpsertDtoValidator : AbstractValidator<ExpenseUpsertDto>
     {
         RuleFor(x => x.Title).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Amount).GreaterThan(0);
-        RuleFor(x => x.FlatId).NotEmpty();
         RuleFor(x => x.PaidByUserId).NotEmpty();
         RuleFor(x => x.ExpenseCategoryId).NotEmpty();
         RuleFor(x => x.ExpenseDate)

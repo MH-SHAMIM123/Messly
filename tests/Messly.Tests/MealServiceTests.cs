@@ -1,5 +1,7 @@
 using Messly.Application.DTOs;
+using Messly.Application.Interfaces.Security;
 using Messly.Application.Services;
+using Messly.Application.Services.Security;
 using Messly.Application.Validators;
 using Messly.Domain.Entities;
 using Messly.Domain.Enums;
@@ -14,7 +16,7 @@ public class MealServiceTests
     [Fact]
     public async Task SaveDailyEntriesAsync_PersistsAndReloads()
     {
-        var (service, db, flatId, userId) = await CreateServiceAsync();
+        var (service, db, _, userId) = await CreateServiceAsync();
         var date = new DateOnly(2026, 5, 18);
         var entries = new List<MealEntryDto>
         {
@@ -28,9 +30,9 @@ public class MealServiceTests
             }
         };
 
-        await service.SaveDailyEntriesAsync(flatId, date, entries);
+        await service.SaveDailyEntriesAsync(date, entries);
 
-        var loaded = await service.GetMealEntriesByDateAsync(flatId, date);
+        var loaded = await service.GetMealEntriesByDateAsync(date);
         var row = Assert.Single(loaded);
         Assert.Equal(1, row.BreakfastCount);
         Assert.Equal(2, row.LunchCount);
@@ -42,7 +44,7 @@ public class MealServiceTests
     [Fact]
     public async Task SaveDailyEntriesAsync_UpdatesExistingByUserAndDate()
     {
-        var (service, db, flatId, userId) = await CreateServiceAsync();
+        var (service, db, _, userId) = await CreateServiceAsync();
         var date = new DateOnly(2026, 5, 18);
         var entry = new MealEntryDto
         {
@@ -53,13 +55,13 @@ public class MealServiceTests
             DinnerCount = 1
         };
 
-        await service.SaveDailyEntriesAsync(flatId, date, [entry]);
+        await service.SaveDailyEntriesAsync(date, [entry]);
         entry.BreakfastCount = 3;
         entry.LunchCount = 0;
         entry.DinnerCount = 2;
-        await service.SaveDailyEntriesAsync(flatId, date, [entry]);
+        await service.SaveDailyEntriesAsync(date, [entry]);
 
-        var loaded = await service.GetMealEntriesByDateAsync(flatId, date);
+        var loaded = await service.GetMealEntriesByDateAsync(date);
         var row = Assert.Single(loaded);
         Assert.Equal(3, row.BreakfastCount);
         Assert.Equal(0, row.LunchCount);
@@ -71,11 +73,11 @@ public class MealServiceTests
     [Fact]
     public async Task SaveDailyEntriesAsync_RejectsInvalidCounts()
     {
-        var (service, db, flatId, userId) = await CreateServiceAsync();
+        var (service, db, _, userId) = await CreateServiceAsync();
         var date = new DateOnly(2026, 5, 18);
 
         await Assert.ThrowsAsync<Messly.Application.Common.BusinessException>(() =>
-            service.SaveDailyEntriesAsync(flatId, date,
+            service.SaveDailyEntriesAsync(date,
             [
                 new MealEntryDto
                 {
@@ -92,20 +94,20 @@ public class MealServiceTests
     [Fact]
     public async Task GetMealTotalsByMonthAsync_AggregatesPerMember()
     {
-        var (service, db, flatId, userId) = await CreateServiceAsync();
+        var (service, db, _, userId) = await CreateServiceAsync();
         var date1 = new DateOnly(2026, 5, 1);
         var date2 = new DateOnly(2026, 5, 2);
 
-        await service.SaveDailyEntriesAsync(flatId, date1,
+        await service.SaveDailyEntriesAsync(date1,
         [
             new MealEntryDto { UserId = userId, BreakfastCount = 1, LunchCount = 1, DinnerCount = 1 }
         ]);
-        await service.SaveDailyEntriesAsync(flatId, date2,
+        await service.SaveDailyEntriesAsync(date2,
         [
             new MealEntryDto { UserId = userId, BreakfastCount = 2, LunchCount = 0, DinnerCount = 1 }
         ]);
 
-        var summary = await service.GetMealTotalsByMonthAsync(flatId, 2026, 5);
+        var summary = await service.GetMealTotalsByMonthAsync(2026, 5);
         var row = Assert.Single(summary);
         Assert.Equal(3, row.TotalBreakfast);
         Assert.Equal(1, row.TotalLunch);
@@ -126,7 +128,7 @@ public class MealServiceTests
         var roleId = Guid.NewGuid();
 
         db.AppUsers.Add(new User { Id = userId, FullName = "Member", Email = "m@test.com", CreatedAt = DateTime.UtcNow });
-        db.AppRoles.Add(new Role { Id = roleId, Name = "Member", RoleType = RoleType.Member, CreatedAt = DateTime.UtcNow });
+        db.AppRoles.Add(new Role { Id = roleId, Name = "Manager", RoleType = RoleType.Manager, CreatedAt = DateTime.UtcNow });
         db.Flats.Add(new Flat { Id = flatId, Name = "Flat", CreatorId = userId, CreatedAt = DateTime.UtcNow });
         db.FlatMembers.Add(new FlatMember
         {
@@ -139,11 +141,16 @@ public class MealServiceTests
         });
         await db.SaveChangesAsync();
 
+        var memberRepo = new FlatMemberRepository(db);
+        ITenantContext tenant = new TestTenantContext(flatId, RoleType.Manager, userId);
+        var auth = new FlatAuthorizationService(tenant, memberRepo);
+
         var service = new MealService(
             new MealRepository(db),
-            new FlatMemberRepository(db),
+            memberRepo,
             new UnitOfWork(db),
-            new MealEntryDtoValidator());
+            new MealEntryDtoValidator(),
+            auth);
 
         return (service, db, flatId, userId);
     }

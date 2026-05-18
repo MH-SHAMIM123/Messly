@@ -1,7 +1,6 @@
 @page "/meals/entry"
 @rendermode InteractiveServer
 @inject IMealService MealService
-@inject FlatContextService FlatContext
 
 <PageHeader Title="Daily Meal Entry" Subtitle="Record breakfast, lunch, and dinner per member" />
 <AlertMessage Message="@_error" />
@@ -61,10 +60,10 @@
         try
         {
             var date = DateOnly.FromDateTime(_date);
-            _entries = (await MealService.GetMealEntriesByDateAsync(FlatContext.CurrentFlatId, date)).ToList();
+            _entries = (await MealService.GetMealEntriesByDateAsync(date)).ToList();
             _error = null;
         }
-        catch (Exception ex) { _error = ex.Message; }
+        catch (Exception ex) { _error = SafeErrorMessages.FromException(ex); }
         finally { _loading = false; }
     }
 
@@ -74,12 +73,14 @@
         _success = null;
         try
         {
-            await MealService.SaveDailyEntriesAsync(FlatContext.CurrentFlatId, DateOnly.FromDateTime(_date), _entries);
+            await MealService.SaveDailyEntriesAsync(DateOnly.FromDateTime(_date), _entries);
             _error = null;
             _success = "Meals saved successfully.";
             await LoadAsync();
         }
-        catch (Exception ex) { _error = ex.Message; }
+        catch (Exception ex) { _error = SafeErrorMessages.FromException(ex); }
         finally { _saving = false; }
     }
 }
+
+

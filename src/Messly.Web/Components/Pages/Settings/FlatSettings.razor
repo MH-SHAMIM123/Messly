@@ -1,7 +1,7 @@
 @page "/settings"
 @rendermode InteractiveServer
+@using Messly.Web.Services
 @inject IDashboardService DashboardService
-@inject FlatContextService FlatContext
 
 <PageHeader Title="Settings" Subtitle="Flat information and configuration" />
 <AlertMessage Message="@_error" />
@@ -32,9 +32,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var flat = await DashboardService.GetFlatSettingsAsync(FlatContext.CurrentFlatId);
-        if (flat is not null) _model = flat;
-        _model.Id = FlatContext.CurrentFlatId;
+        var flat = await DashboardService.GetFlatSettingsAsync();
+        if (flat is not null)
+            _model = flat;
     }
 
     private async Task SaveAsync()
@@ -47,7 +47,9 @@
             _success = true;
             _error = null;
         }
-        catch (Exception ex) { _error = ex.Message; }
+        catch (Exception ex) { _error = SafeErrorMessages.FromException(ex); }
         finally { _saving = false; }
     }
 }
+
+

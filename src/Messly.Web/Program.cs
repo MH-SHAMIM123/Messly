@@ -2,6 +2,7 @@ using Messly.Infrastructure;
 using Messly.Infrastructure.Data;
 using Messly.Infrastructure.Identity;
 using Messly.Web.Components;
+using Messly.Application.Interfaces.Security;
 using Messly.Web.Services;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -36,8 +37,8 @@ try
     });
 
     builder.Services.AddInfrastructure(builder.Configuration);
-    builder.Services.AddScoped<FlatContextService>();
     builder.Services.AddHttpContextAccessor();
+    builder.Services.AddScoped<ITenantContext, TenantContext>();
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<MesslyDbContext>("database");
 

@@ -1,7 +1,6 @@
 @page "/members"
 @rendermode InteractiveServer
 @inject IMemberService MemberService
-@inject FlatContextService FlatContext
 @inject IJSRuntime Js
 
 <PageHeader Title="Members" Subtitle="Manage all mess members" ActionText="Add Member" ActionUrl="/members/add" />
@@ -46,11 +45,11 @@
         _error = null;
         try
         {
-            _members = (await MemberService.GetMembersAsync(FlatContext.CurrentFlatId)).ToList();
+            _members = (await MemberService.GetMembersAsync()).ToList();
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = SafeErrorMessages.FromException(ex);
         }
         finally
         {
@@ -72,7 +71,9 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = SafeErrorMessages.FromException(ex);
         }
     }
 }
+
+

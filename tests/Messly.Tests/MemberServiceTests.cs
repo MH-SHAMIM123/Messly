@@ -1,5 +1,7 @@
 using Messly.Application.DTOs;
+using Messly.Application.Interfaces.Security;
 using Messly.Application.Services;
+using Messly.Application.Services.Security;
 using Messly.Application.Validators;
 using Messly.Domain.Entities;
 using Messly.Domain.Enums;
@@ -17,14 +19,13 @@ public class MemberServiceTests
         var (service, db, flatId) = await CreateServiceAsync();
         var id = await service.CreateMemberAsync(new MemberUpsertDto
         {
-            FlatId = flatId,
             FullName = "Rahim",
             Email = "rahim@test.com",
             RoleType = RoleType.Member
         });
 
         Assert.NotEqual(Guid.Empty, id);
-        var members = await service.GetMembersAsync(flatId);
+        var members = await service.GetMembersAsync();
         Assert.Contains(members, m => m.Email == "rahim@test.com" && m.FullName == "Rahim");
         await db.DisposeAsync();
     }
@@ -35,7 +36,6 @@ public class MemberServiceTests
         var (service, db, flatId) = await CreateServiceAsync();
         var id = await service.CreateMemberAsync(new MemberUpsertDto
         {
-            FlatId = flatId,
             FullName = "Karim",
             Email = "karim@test.com",
             RoleType = RoleType.Member
@@ -44,7 +44,6 @@ public class MemberServiceTests
         await service.UpdateMemberAsync(new MemberUpsertDto
         {
             Id = id,
-            FlatId = flatId,
             FullName = "Karim Updated",
             Email = "karim@test.com",
             RoleType = RoleType.Member
@@ -61,7 +60,6 @@ public class MemberServiceTests
         var (service, db, flatId) = await CreateServiceAsync();
         var id = await service.CreateMemberAsync(new MemberUpsertDto
         {
-            FlatId = flatId,
             FullName = "To Delete",
             Email = "delete@test.com",
             RoleType = RoleType.Member
@@ -69,7 +67,7 @@ public class MemberServiceTests
 
         await service.DeleteMemberAsync(id);
 
-        var members = await service.GetMembersAsync(flatId);
+        var members = await service.GetMembersAsync();
         Assert.DoesNotContain(members, m => m.Id == id);
         await db.DisposeAsync();
     }
@@ -89,14 +87,28 @@ public class MemberServiceTests
         db.AppRoles.Add(new Role { Id = managerRoleId, Name = "Manager", RoleType = RoleType.Manager, CreatedAt = DateTime.UtcNow });
         db.AppRoles.Add(new Role { Id = memberRoleId, Name = "Member", RoleType = RoleType.Member, CreatedAt = DateTime.UtcNow });
         db.Flats.Add(new Flat { Id = flatId, Name = "Test Flat", CreatorId = creatorId, CreatedAt = DateTime.UtcNow });
+        db.FlatMembers.Add(new FlatMember
+        {
+            Id = Guid.NewGuid(),
+            FlatId = flatId,
+            UserId = creatorId,
+            RoleId = managerRoleId,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        });
         await db.SaveChangesAsync();
 
+        var memberRepo = new FlatMemberRepository(db);
+        ITenantContext tenant = new TestTenantContext(flatId, RoleType.Manager, creatorId);
+        var auth = new FlatAuthorizationService(tenant, memberRepo);
+
         var service = new MemberService(
-            new FlatMemberRepository(db),
+            memberRepo,
             new UserRepository(db),
             new RoleRepository(db),
             new UnitOfWork(db),
-            new MemberUpsertDtoValidator());
+            new MemberUpsertDtoValidator(),
+            auth);
 
         return (service, db, flatId);
     }

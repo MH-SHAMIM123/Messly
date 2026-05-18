@@ -9,7 +9,6 @@ public class DepositUpsertDtoValidator : AbstractValidator<DepositUpsertDto>
     {
         RuleFor(x => x.Amount).GreaterThan(0);
         RuleFor(x => x.UserId).NotEmpty();
-        RuleFor(x => x.FlatId).NotEmpty();
         RuleFor(x => x.DepositDate)
             .Must(d => d != default)
             .WithMessage("Date is required.");

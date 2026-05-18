@@ -1,16 +1,16 @@
 @page "/login"
 @using System.Security.Claims
 @using Messly.Infrastructure.Data
-@using Microsoft.EntityFrameworkCore
 @using Messly.Infrastructure.Identity
+@using Messly.Web.Services
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
 @rendermode InteractiveServer
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @inject SignInManager<ApplicationUser> SignInManager
 @inject UserManager<ApplicationUser> UserManager
 @inject MesslyDbContext DbContext
 @inject NavigationManager Navigation
-@inject IConfiguration Configuration
 
 <PageTitle>Login - Messly</PageTitle>
 
@@ -52,37 +52,49 @@
                 return;
             }
 
-            var result = await SignInManager.PasswordSignInAsync(user, _model.Password, isPersistent: true, lockoutOnFailure: false);
+            var result = await SignInManager.PasswordSignInAsync(user, _model.Password, isPersistent: true, lockoutOnFailure: true);
             if (!result.Succeeded)
             {
                 _error = "Invalid login attempt.";
                 return;
             }
 
-            var flatId = Guid.TryParse(Configuration["Messly:DefaultFlatId"], out var id)
-                ? id
-                : DevDataSeeder.DefaultFlatId;
+            if (user.DomainUserId is null)
+            {
+                await SignInManager.SignOutAsync();
+                _error = "Your account is not linked to a mess member profile.";
+                return;
+            }
 
             var membership = await DbContext.FlatMembers
+                .AsNoTracking()
                 .Include(fm => fm.Role)
-                .FirstOrDefaultAsync(fm => fm.UserId == user.DomainUserId && fm.FlatId == flatId);
+                .Where(fm => fm.UserId == user.DomainUserId && fm.IsActive)
+                .OrderBy(fm => fm.JoinedAt)
+                .FirstOrDefaultAsync();
+
+            if (membership is null)
+            {
+                await SignInManager.SignOutAsync();
+                _error = "You are not assigned to any active mess flat.";
+                return;
+            }
 
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim("flat_id", flatId.ToString())
+                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new(TenantContext.FlatIdClaimType, membership.FlatId.ToString()),
+                new(TenantContext.DomainUserIdClaimType, user.DomainUserId.Value.ToString())
             };
-            if (membership?.Role?.RoleType is not null)
-            {
+            if (membership.Role?.RoleType is not null)
                 claims.Add(new Claim(ClaimTypes.Role, membership.Role.RoleType.ToString()));
-            }
 
             await SignInManager.SignInWithClaimsAsync(user, isPersistent: true, claims);
             Navigation.NavigateTo("/", true);
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = SafeErrorMessages.FromException(ex);
         }
         finally
         {
@@ -96,3 +108,5 @@
         public string Password { get; set; } = string.Empty;
     }
 }
+
+

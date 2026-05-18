@@ -1,5 +1,6 @@
 using Messly.Application.DTOs;
 using Messly.Application.Interfaces.Persistence;
+using Messly.Application.Interfaces.Security;
 using Messly.Application.Interfaces.Services;
 using Messly.Domain.Entities;
 
@@ -11,14 +12,16 @@ public class BillingCalculationService(
     IMealRepository mealRepository,
     IFlatMemberRepository memberRepository,
     IRepository<MonthlySummary> monthlySummaryRepository,
-    IUnitOfWork unitOfWork) : IBillingCalculationService
+    IUnitOfWork unitOfWork,
+    IFlatAuthorizationService authorization) : IBillingCalculationService
 {
     public async Task<decimal> CalculateMealRateAsync(
-        Guid flatId,
         int year,
         int month,
         CancellationToken cancellationToken = default)
     {
+        authorization.EnsureCanRead();
+        var flatId = authorization.GetCurrentFlatId();
         var totalExpenses = await expenseRepository.GetTotalByFlatAndMonthAsync(flatId, year, month, cancellationToken);
         var meals = await mealRepository.GetByFlatAndMonthAsync(flatId, year, month, cancellationToken);
         var totalMeals = meals.Sum(m => m.TotalMealCount);
@@ -30,12 +33,13 @@ public class BillingCalculationService(
     }
 
     public async Task<IReadOnlyList<MemberBalanceDto>> GetMemberBalancesAsync(
-        Guid flatId,
         int year,
         int month,
         CancellationToken cancellationToken = default)
     {
-        var mealRate = await CalculateMealRateAsync(flatId, year, month, cancellationToken);
+        authorization.EnsureCanRead();
+        var flatId = authorization.GetCurrentFlatId();
+        var mealRate = await CalculateMealRateAsync(year, month, cancellationToken);
         var members = await memberRepository.GetByFlatIdAsync(flatId, cancellationToken);
         var meals = await mealRepository.GetByFlatAndMonthAsync(flatId, year, month, cancellationToken);
         var deposits = await depositRepository.GetByFlatAndMonthAsync(flatId, year, month, cancellationToken);
@@ -44,11 +48,12 @@ public class BillingCalculationService(
     }
 
     public async Task<MonthlySummaryDto> BuildFinancialSummaryAsync(
-        Guid flatId,
         int year,
         int month,
         CancellationToken cancellationToken = default)
     {
+        authorization.EnsureCanRead();
+        var flatId = authorization.GetCurrentFlatId();
         var members = await memberRepository.GetByFlatIdAsync(flatId, cancellationToken);
         var meals = await mealRepository.GetByFlatAndMonthAsync(flatId, year, month, cancellationToken);
         var deposits = await depositRepository.GetByFlatAndMonthAsync(flatId, year, month, cancellationToken);
@@ -84,12 +89,13 @@ public class BillingCalculationService(
     }
 
     public async Task GenerateMonthlySummaryAsync(
-        Guid flatId,
         int year,
         int month,
         CancellationToken cancellationToken = default)
     {
-        var summary = await BuildFinancialSummaryAsync(flatId, year, month, cancellationToken);
+        authorization.EnsureManager();
+        var flatId = authorization.GetCurrentFlatId();
+        var summary = await BuildFinancialSummaryAsync(year, month, cancellationToken);
         var existing = (await monthlySummaryRepository.FindAsync(
             s => s.FlatId == flatId && s.Year == year && s.Month == month,
             cancellationToken)).FirstOrDefault();
@@ -113,7 +119,8 @@ public class BillingCalculationService(
         else
         {
             var tracked = await monthlySummaryRepository.GetByIdForUpdateAsync(existing.Id, cancellationToken);
-            if (tracked is null) return;
+            if (tracked is null || tracked.FlatId != flatId)
+                return;
 
             tracked.TotalMembers = summary.TotalMembers;
             tracked.TotalMeals = summary.TotalMeals;

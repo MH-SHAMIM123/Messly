@@ -1,4 +1,6 @@
+using Messly.Application.Interfaces.Security;
 using Messly.Application.Services;
+using Messly.Application.Services.Security;
 using Messly.Domain.Entities;
 using Messly.Domain.Enums;
 using Messly.Infrastructure.Data;
@@ -15,7 +17,7 @@ public class BillingCalculationServiceTests
         var (service, db, flatId, userId, _) = await CreateServiceAsync();
         await SeedExpenseAndMealAsync(db, flatId, userId, 3000, 3);
 
-        var rate = await service.CalculateMealRateAsync(flatId, 2026, 5);
+        var rate = await service.CalculateMealRateAsync(2026, 5);
 
         Assert.Equal(1000m, rate);
         await db.DisposeAsync();
@@ -37,7 +39,7 @@ public class BillingCalculationServiceTests
         });
         await db.SaveChangesAsync();
 
-        var rate = await service.CalculateMealRateAsync(flatId, 2026, 5);
+        var rate = await service.CalculateMealRateAsync(2026, 5);
 
         Assert.Equal(0m, rate);
         await db.DisposeAsync();
@@ -59,7 +61,7 @@ public class BillingCalculationServiceTests
         });
         await db.SaveChangesAsync();
 
-        var rate = await service.CalculateMealRateAsync(flatId, 2026, 5);
+        var rate = await service.CalculateMealRateAsync(2026, 5);
 
         Assert.Equal(0m, rate);
         await db.DisposeAsync();
@@ -80,7 +82,7 @@ public class BillingCalculationServiceTests
         });
         await db.SaveChangesAsync();
 
-        var balances = await service.GetMemberBalancesAsync(flatId, 2026, 5);
+        var balances = await service.GetMemberBalancesAsync(2026, 5);
         var row = Assert.Single(balances);
 
         Assert.Equal(3, row.TotalMeals);
@@ -97,7 +99,7 @@ public class BillingCalculationServiceTests
         var (service, db, flatId, userId, _) = await CreateServiceAsync();
         await SeedExpenseAndMealAsync(db, flatId, userId, 3000, 3);
 
-        await service.GenerateMonthlySummaryAsync(flatId, 2026, 5);
+        await service.GenerateMonthlySummaryAsync(2026, 5);
 
         var stored = await db.MonthlySummaries
             .FirstOrDefaultAsync(s => s.FlatId == flatId && s.Year == 2026 && s.Month == 5);
@@ -113,9 +115,9 @@ public class BillingCalculationServiceTests
     [Fact]
     public async Task BuildFinancialSummaryAsync_IncludesMemberBalancesAndValidationNote()
     {
-        var (service, db, flatId, userId, _) = await CreateServiceAsync();
+        var (service, db, _, _, _) = await CreateServiceAsync();
 
-        var summary = await service.BuildFinancialSummaryAsync(flatId, 2026, 5);
+        var summary = await service.BuildFinancialSummaryAsync(2026, 5);
 
         Assert.False(summary.HasMeals);
         Assert.False(summary.HasExpenses);
@@ -172,7 +174,7 @@ public class BillingCalculationServiceTests
         var roleId = Guid.NewGuid();
 
         db.AppUsers.Add(new User { Id = userId, FullName = "Test", Email = "t@test.com", CreatedAt = DateTime.UtcNow });
-        db.AppRoles.Add(new Role { Id = roleId, Name = "Member", RoleType = RoleType.Member, CreatedAt = DateTime.UtcNow });
+        db.AppRoles.Add(new Role { Id = roleId, Name = "Manager", RoleType = RoleType.Manager, CreatedAt = DateTime.UtcNow });
         db.Flats.Add(new Flat { Id = flatId, Name = "Test", CreatorId = userId, CreatedAt = DateTime.UtcNow });
         db.FlatMembers.Add(new FlatMember
         {
@@ -186,13 +188,18 @@ public class BillingCalculationServiceTests
         db.ExpenseCategories.Add(new ExpenseCategory { Id = categoryId, FlatId = flatId, Name = "Grocery", CreatedAt = DateTime.UtcNow });
         await db.SaveChangesAsync();
 
+        var memberRepo = new FlatMemberRepository(db);
+        ITenantContext tenant = new TestTenantContext(flatId, RoleType.Manager, userId);
+        var auth = new FlatAuthorizationService(tenant, memberRepo);
+
         var service = new BillingCalculationService(
             new ExpenseRepository(db),
             new DepositRepository(db),
             new MealRepository(db),
-            new FlatMemberRepository(db),
+            memberRepo,
             new Repository<MonthlySummary>(db),
-            new UnitOfWork(db));
+            new UnitOfWork(db),
+            auth);
 
         return (service, db, flatId, userId, categoryId);
     }

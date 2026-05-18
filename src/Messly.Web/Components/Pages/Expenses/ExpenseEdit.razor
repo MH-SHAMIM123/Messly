@@ -3,7 +3,6 @@
 @rendermode InteractiveServer
 @inject IExpenseService ExpenseService
 @inject IMemberService MemberService
-@inject FlatContextService FlatContext
 @inject NavigationManager Navigation
 
 <PageHeader Title="@_title" Subtitle="Record a mess expense" />
@@ -122,10 +121,10 @@ else
         _loading = true;
         _notFound = false;
         _error = null;
-        _model = new ExpenseFormModel { FlatId = FlatContext.CurrentFlatId };
+        _model = new ExpenseFormModel();
 
-        _categories = (await ExpenseService.GetCategoriesAsync(FlatContext.CurrentFlatId)).ToList();
-        _members = (await MemberService.GetMembersAsync(FlatContext.CurrentFlatId))
+        _categories = (await ExpenseService.GetCategoriesAsync()).ToList();
+        _members = (await MemberService.GetMembersAsync())
             .Where(m => m.IsActive)
             .ToList();
 
@@ -175,7 +174,6 @@ else
             var dto = new ExpenseUpsertDto
             {
                 Id = _model.Id,
-                FlatId = _model.FlatId,
                 Title = _model.Title.Trim(),
                 Description = string.IsNullOrWhiteSpace(_model.Description) ? null : _model.Description.Trim(),
                 Amount = _model.Amount,
@@ -194,7 +192,7 @@ else
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = SafeErrorMessages.FromException(ex);
         }
         finally
         {
@@ -218,3 +216,5 @@ else
         public Guid ExpenseCategoryId { get; set; }
     }
 }
+
+

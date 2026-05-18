@@ -1,7 +1,6 @@
 @page "/meals/summary"
 @rendermode InteractiveServer
 @inject IMealService MealService
-@inject FlatContextService FlatContext
 
 <PageHeader Title="Meal Summary" Subtitle="Monthly meal totals per member" />
 <AlertMessage Message="@_error" />
@@ -59,12 +58,13 @@
             if (DateOnly.TryParse(_monthValue + "-01", out var first))
             {
                 _rows = (await MealService.GetMealTotalsByMonthAsync(
-                    FlatContext.CurrentFlatId,
                     first.Year,
                     first.Month)).ToList();
             }
         }
-        catch (Exception ex) { _error = ex.Message; }
+        catch (Exception ex) { _error = SafeErrorMessages.FromException(ex); }
         finally { _loading = false; }
     }
 }
+
+

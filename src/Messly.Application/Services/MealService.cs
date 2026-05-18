@@ -2,6 +2,7 @@ using FluentValidation;
 using Messly.Application.Common;
 using Messly.Application.DTOs;
 using Messly.Application.Interfaces.Persistence;
+using Messly.Application.Interfaces.Security;
 using Messly.Application.Interfaces.Services;
 using Messly.Domain.Entities;
 
@@ -11,13 +12,15 @@ public class MealService(
     IMealRepository mealRepository,
     IFlatMemberRepository memberRepository,
     IUnitOfWork unitOfWork,
-    IValidator<MealEntryDto> entryValidator) : IMealService
+    IValidator<MealEntryDto> entryValidator,
+    IFlatAuthorizationService authorization) : IMealService
 {
     public async Task<IReadOnlyList<MealEntryDto>> GetMealEntriesByDateAsync(
-        Guid flatId,
         DateOnly date,
         CancellationToken cancellationToken = default)
     {
+        authorization.EnsureCanRead();
+        var flatId = authorization.GetCurrentFlatId();
         var members = await memberRepository.GetByFlatIdAsync(flatId, cancellationToken);
         var meals = await mealRepository.GetByFlatAndDateAsync(flatId, date, cancellationToken);
         var mealsByUser = meals.ToDictionary(m => m.UserId);
@@ -41,16 +44,21 @@ public class MealService(
     }
 
     public async Task SaveDailyEntriesAsync(
-        Guid flatId,
         DateOnly date,
         IReadOnlyList<MealEntryDto> entries,
         CancellationToken cancellationToken = default)
     {
+        authorization.EnsureManager();
+        var flatId = authorization.GetCurrentFlatId();
+
         if (entries.Count == 0)
             throw new BusinessException("At least one meal entry is required.");
 
         foreach (var entry in entries)
+        {
             await ValidateEntryAsync(entry, cancellationToken);
+            await authorization.EnsureUserIsActiveMemberAsync(entry.UserId, cancellationToken);
+        }
 
         var existingByUser = (await mealRepository.GetByFlatAndDateForUpdateAsync(flatId, date, cancellationToken))
             .ToDictionary(m => m.UserId);
@@ -85,11 +93,12 @@ public class MealService(
     }
 
     public async Task<IReadOnlyList<MealSummaryDto>> GetMealTotalsByMonthAsync(
-        Guid flatId,
         int year,
         int month,
         CancellationToken cancellationToken = default)
     {
+        authorization.EnsureCanRead();
+        var flatId = authorization.GetCurrentFlatId();
         var members = await memberRepository.GetByFlatIdAsync(flatId, cancellationToken);
         var meals = await mealRepository.GetByFlatAndMonthAsync(flatId, year, month, cancellationToken);
         var mealsByUser = meals.GroupBy(m => m.UserId).ToDictionary(g => g.Key, g => g.ToList());

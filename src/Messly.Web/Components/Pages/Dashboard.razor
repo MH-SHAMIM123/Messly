@@ -1,7 +1,6 @@
 @page "/"
 @rendermode InteractiveServer
 @inject IDashboardService DashboardService
-@inject FlatContextService FlatContext
 
 <PageHeader Title="Dashboard" Subtitle="Overview for your mess flat (Manager view)" />
 
@@ -49,7 +48,7 @@ else if (_dashboard is not null)
     {
         try
         {
-            _dashboard = await DashboardService.GetDashboardAsync(FlatContext.CurrentFlatId);
+            _dashboard = await DashboardService.GetDashboardAsync();
         }
         finally
         {
@@ -57,3 +56,5 @@ else if (_dashboard is not null)
         }
     }
 }
+
+

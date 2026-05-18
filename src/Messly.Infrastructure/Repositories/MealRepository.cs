@@ -7,6 +7,12 @@ namespace Messly.Infrastructure.Repositories;
 
 public class MealRepository(MesslyDbContext context) : Repository<Meal>(context), IMealRepository
 {
+    public async Task<Meal?> GetByIdAndFlatAsync(Guid id, Guid flatId, CancellationToken cancellationToken = default)
+        => await DbSet
+            .AsNoTracking()
+            .Include(m => m.User)
+            .FirstOrDefaultAsync(m => m.Id == id && m.FlatId == flatId, cancellationToken);
+
     public async Task<IReadOnlyList<Meal>> GetByFlatAndDateAsync(Guid flatId, DateOnly date, CancellationToken cancellationToken = default)
         => await DbSet
             .AsNoTracking()

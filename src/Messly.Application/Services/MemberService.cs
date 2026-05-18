@@ -2,6 +2,7 @@ using FluentValidation;
 using Messly.Application.Common;
 using Messly.Application.DTOs;
 using Messly.Application.Interfaces.Persistence;
+using Messly.Application.Interfaces.Security;
 using Messly.Application.Interfaces.Services;
 using Messly.Domain.Entities;
 using Messly.Domain.Enums;
@@ -13,17 +14,22 @@ public class MemberService(
     IUserRepository userRepository,
     IRoleRepository roleRepository,
     IUnitOfWork unitOfWork,
-    IValidator<MemberUpsertDto> validator) : IMemberService
+    IValidator<MemberUpsertDto> validator,
+    IFlatAuthorizationService authorization) : IMemberService
 {
-    public async Task<IReadOnlyList<MemberDto>> GetMembersAsync(Guid flatId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<MemberDto>> GetMembersAsync(CancellationToken cancellationToken = default)
     {
+        authorization.EnsureCanRead();
+        var flatId = authorization.GetCurrentFlatId();
         var members = await memberRepository.GetByFlatIdAsync(flatId, cancellationToken);
         return members.Select(MapToDto).ToList();
     }
 
     public async Task<MemberDto?> GetMemberAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var member = await memberRepository.GetByIdWithDetailsAsync(id, cancellationToken);
+        authorization.EnsureCanRead();
+        var flatId = authorization.GetCurrentFlatId();
+        var member = await memberRepository.GetByIdWithDetailsAsync(id, flatId, cancellationToken);
         return member is null ? null : MapToDto(member);
     }
 
@@ -40,6 +46,9 @@ public class MemberService(
 
     public async Task<Guid> CreateMemberAsync(MemberUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        authorization.EnsureManager();
+        var flatId = authorization.GetCurrentFlatId();
+
         if (dto.Id.HasValue)
             throw new BusinessException("Cannot create a member with an existing id. Use update instead.");
 
@@ -62,7 +71,7 @@ public class MemberService(
 
         var flatMember = new FlatMember
         {
-            FlatId = dto.FlatId,
+            FlatId = flatId,
             UserId = user.Id,
             RoleId = role.Id,
             JoinedAt = DateTime.UtcNow,
@@ -75,6 +84,9 @@ public class MemberService(
 
     public async Task UpdateMemberAsync(MemberUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        authorization.EnsureManager();
+        var flatId = authorization.GetCurrentFlatId();
+
         if (!dto.Id.HasValue)
             throw new BusinessException("Member id is required for update.");
 
@@ -82,11 +94,8 @@ public class MemberService(
 
         var role = await GetRoleAsync(dto.RoleType, cancellationToken);
 
-        var member = await memberRepository.GetByIdWithDetailsAsync(dto.Id.Value, cancellationToken)
-            ?? throw new BusinessException("Member not found.");
-
-        if (member.FlatId != dto.FlatId)
-            throw new BusinessException("Member does not belong to this flat.");
+        var member = await memberRepository.GetByIdWithDetailsForUpdateAsync(dto.Id.Value, flatId, cancellationToken)
+            ?? throw new NotFoundException();
 
         var emailOwner = await userRepository.GetByEmailAsync(dto.Email.Trim(), cancellationToken);
         if (emailOwner is not null && emailOwner.Id != member.UserId)
@@ -108,12 +117,15 @@ public class MemberService(
 
     public async Task DeleteMemberAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var member = await memberRepository.GetByIdWithDetailsAsync(id, cancellationToken)
-            ?? throw new BusinessException("Member not found.");
+        authorization.EnsureManager();
+        var flatId = authorization.GetCurrentFlatId();
+
+        var member = await memberRepository.GetByIdWithDetailsForUpdateAsync(id, flatId, cancellationToken)
+            ?? throw new NotFoundException();
 
         if (member.Role?.RoleType == RoleType.Manager)
         {
-            var managerCount = await memberRepository.CountActiveManagersAsync(member.FlatId, cancellationToken);
+            var managerCount = await memberRepository.CountActiveManagersAsync(flatId, cancellationToken);
             if (managerCount <= 1)
                 throw new BusinessException("Cannot remove the last manager of this flat.");
         }

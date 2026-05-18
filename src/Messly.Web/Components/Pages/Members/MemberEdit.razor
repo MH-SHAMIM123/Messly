@@ -2,7 +2,6 @@
 @page "/members/edit/{Id:guid}"
 @rendermode InteractiveServer
 @inject IMemberService MemberService
-@inject FlatContextService FlatContext
 @inject NavigationManager Navigation
 
 <PageHeader Title="@_title" Subtitle="Add or update member details" />
@@ -89,7 +88,7 @@ else
         _loading = true;
         _notFound = false;
         _error = null;
-        _model = new MemberFormModel { FlatId = FlatContext.CurrentFlatId };
+        _model = new MemberFormModel();
 
         if (Id.HasValue)
         {
@@ -125,7 +124,6 @@ else
             var dto = new MemberUpsertDto
             {
                 Id = _model.Id,
-                FlatId = _model.FlatId,
                 FullName = _model.FullName.Trim(),
                 Email = _model.Email.Trim(),
                 Phone = string.IsNullOrWhiteSpace(_model.Phone) ? null : _model.Phone.Trim(),
@@ -142,7 +140,7 @@ else
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = SafeErrorMessages.FromException(ex);
         }
         finally
         {
@@ -161,3 +159,5 @@ else
         public bool IsActive { get; set; } = true;
     }
 }
+
+

@@ -1,7 +1,6 @@
 @page "/deposits"
 @rendermode InteractiveServer
 @inject IDepositService DepositService
-@inject FlatContextService FlatContext
 @inject IJSRuntime Js
 
 <PageHeader Title="Deposits" Subtitle="Track member deposits" ActionText="Add Deposit" ActionUrl="/deposits/add" />
@@ -45,11 +44,11 @@
         _error = null;
         try
         {
-            _items = (await DepositService.GetDepositsAsync(FlatContext.CurrentFlatId)).ToList();
+            _items = (await DepositService.GetDepositsAsync()).ToList();
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = SafeErrorMessages.FromException(ex);
         }
         finally
         {
@@ -72,7 +71,9 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = SafeErrorMessages.FromException(ex);
         }
     }
 }
+
+

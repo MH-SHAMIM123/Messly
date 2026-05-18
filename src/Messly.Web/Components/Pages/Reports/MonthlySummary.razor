@@ -1,7 +1,6 @@
 @page "/reports/monthly"
 @rendermode InteractiveServer
 @inject IBillingCalculationService BillingService
-@inject FlatContextService FlatContext
 
 <PageHeader Title="Monthly Summary" Subtitle="Consolidated monthly mess report" />
 <AlertMessage Message="@_error" />
@@ -82,11 +81,10 @@ else if (_summary is not null)
                 return;
 
             _summary = await BillingService.BuildFinancialSummaryAsync(
-                FlatContext.CurrentFlatId,
                 first.Year,
                 first.Month);
         }
-        catch (Exception ex) { _error = ex.Message; }
+        catch (Exception ex) { _error = SafeErrorMessages.FromException(ex); }
         finally { _loading = false; }
     }
 
@@ -99,12 +97,13 @@ else if (_summary is not null)
                 return;
 
             await BillingService.GenerateMonthlySummaryAsync(
-                FlatContext.CurrentFlatId,
                 first.Year,
                 first.Month);
             await LoadAsync();
         }
-        catch (Exception ex) { _error = ex.Message; }
+        catch (Exception ex) { _error = SafeErrorMessages.FromException(ex); }
     }
 }
+
+
 

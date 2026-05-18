@@ -14,6 +14,19 @@ public class ExpenseRepository(MesslyDbContext context) : Repository<Expense>(co
             .Include(e => e.PaidBy)
             .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 
+    public async Task<Expense?> GetByIdAndFlatAsync(Guid id, Guid flatId, CancellationToken cancellationToken = default)
+        => await DbSet
+            .AsNoTracking()
+            .Include(e => e.Category)
+            .Include(e => e.PaidBy)
+            .FirstOrDefaultAsync(e => e.Id == id && e.FlatId == flatId, cancellationToken);
+
+    public async Task<Expense?> GetByIdForUpdateAndFlatAsync(Guid id, Guid flatId, CancellationToken cancellationToken = default)
+        => await DbSet
+            .Include(e => e.Category)
+            .Include(e => e.PaidBy)
+            .FirstOrDefaultAsync(e => e.Id == id && e.FlatId == flatId, cancellationToken);
+
     public async Task<IReadOnlyList<Expense>> GetByFlatIdAsync(Guid flatId, CancellationToken cancellationToken = default)
         => await DbSet
             .AsNoTracking()

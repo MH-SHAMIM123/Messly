@@ -11,7 +11,6 @@ public class MemberUpsertDtoValidator : AbstractValidator<MemberUpsertDto>
         RuleFor(x => x.FullName).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(256);
         RuleFor(x => x.Phone).MaximumLength(20).When(x => !string.IsNullOrWhiteSpace(x.Phone));
-        RuleFor(x => x.FlatId).NotEmpty();
         RuleFor(x => x.RoleType).IsInEnum();
     }
 }

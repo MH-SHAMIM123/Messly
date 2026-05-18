@@ -13,6 +13,17 @@ public class DepositRepository(MesslyDbContext context) : Repository<Deposit>(co
             .Include(d => d.User)
             .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
 
+    public async Task<Deposit?> GetByIdAndFlatAsync(Guid id, Guid flatId, CancellationToken cancellationToken = default)
+        => await DbSet
+            .AsNoTracking()
+            .Include(d => d.User)
+            .FirstOrDefaultAsync(d => d.Id == id && d.FlatId == flatId, cancellationToken);
+
+    public async Task<Deposit?> GetByIdForUpdateAndFlatAsync(Guid id, Guid flatId, CancellationToken cancellationToken = default)
+        => await DbSet
+            .Include(d => d.User)
+            .FirstOrDefaultAsync(d => d.Id == id && d.FlatId == flatId, cancellationToken);
+
     public async Task<IReadOnlyList<Deposit>> GetByFlatIdAsync(Guid flatId, CancellationToken cancellationToken = default)
         => await DbSet
             .AsNoTracking()

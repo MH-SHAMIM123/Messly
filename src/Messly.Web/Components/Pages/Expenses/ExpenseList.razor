@@ -1,7 +1,6 @@
 @page "/expenses"
 @rendermode InteractiveServer
 @inject IExpenseService ExpenseService
-@inject FlatContextService FlatContext
 @inject IJSRuntime Js
 
 <PageHeader Title="Expenses" Subtitle="View and manage all flat expenses" ActionText="Add Expense" ActionUrl="/expenses/add" />
@@ -47,11 +46,11 @@
         _error = null;
         try
         {
-            _items = (await ExpenseService.GetExpensesAsync(FlatContext.CurrentFlatId)).ToList();
+            _items = (await ExpenseService.GetExpensesAsync()).ToList();
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = SafeErrorMessages.FromException(ex);
         }
         finally
         {
@@ -73,7 +72,9 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = SafeErrorMessages.FromException(ex);
         }
     }
 }
+
+
