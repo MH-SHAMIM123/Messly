@@ -12,5 +12,8 @@ public class ExpenseUpsertDtoValidator : AbstractValidator<ExpenseUpsertDto>
         RuleFor(x => x.FlatId).NotEmpty();
         RuleFor(x => x.PaidByUserId).NotEmpty();
         RuleFor(x => x.ExpenseCategoryId).NotEmpty();
+        RuleFor(x => x.ExpenseDate)
+            .Must(d => d != default)
+            .WithMessage("Date is required.");
     }
 }

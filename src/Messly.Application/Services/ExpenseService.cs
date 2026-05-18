@@ -1,3 +1,4 @@
+using FluentValidation;
 using Messly.Application.Common;
 using Messly.Application.DTOs;
 using Messly.Application.Interfaces.Persistence;
@@ -9,8 +10,12 @@ namespace Messly.Application.Services;
 public class ExpenseService(
     IExpenseRepository expenseRepository,
     IExpenseCategoryRepository categoryRepository,
-    IUnitOfWork unitOfWork) : IExpenseService
+    IUnitOfWork unitOfWork,
+    IValidator<ExpenseUpsertDto> validator) : IExpenseService
 {
+    private static readonly string[] DefaultCategoryNames =
+        ["Grocery", "Utility", "Gas", "Cook Salary", "Other"];
+
     public async Task<IReadOnlyList<ExpenseDto>> GetExpensesAsync(Guid flatId, CancellationToken cancellationToken = default)
     {
         var expenses = await expenseRepository.GetByFlatIdAsync(flatId, cancellationToken);
@@ -25,28 +30,23 @@ public class ExpenseService(
 
     public async Task<Guid> SaveExpenseAsync(ExpenseUpsertDto dto, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(dto.Title))
-            throw new BusinessException("Title is required.");
-        if (dto.Amount <= 0)
-            throw new BusinessException("Amount must be greater than zero.");
-
         if (dto.Id.HasValue)
         {
-            var expense = await expenseRepository.GetByIdForUpdateAsync(dto.Id.Value, cancellationToken)
-                ?? throw new BusinessException("Expense not found.");
-
-            expense.Title = dto.Title.Trim();
-            expense.Description = dto.Description?.Trim();
-            expense.Amount = dto.Amount;
-            expense.ExpenseDate = dto.ExpenseDate;
-            expense.ExpenseType = dto.ExpenseType;
-            expense.PaidByUserId = dto.PaidByUserId;
-            expense.ExpenseCategoryId = dto.ExpenseCategoryId;
-            expense.UpdatedAt = DateTime.UtcNow;
-            expenseRepository.Update(expense);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return expense.Id;
+            await UpdateExpenseAsync(dto, cancellationToken);
+            return dto.Id.Value;
         }
+
+        return await CreateExpenseAsync(dto, cancellationToken);
+    }
+
+    public async Task<Guid> CreateExpenseAsync(ExpenseUpsertDto dto, CancellationToken cancellationToken = default)
+    {
+        if (dto.Id.HasValue)
+            throw new BusinessException("Cannot create an expense with an existing id. Use update instead.");
+
+        await ValidateAsync(dto, cancellationToken);
+        await EnsureDefaultCategoriesAsync(dto.FlatId, cancellationToken);
+        await ValidateCategoryBelongsToFlatAsync(dto.FlatId, dto.ExpenseCategoryId, cancellationToken);
 
         var entity = new Expense
         {
@@ -64,10 +64,37 @@ public class ExpenseService(
         return entity.Id;
     }
 
+    public async Task UpdateExpenseAsync(ExpenseUpsertDto dto, CancellationToken cancellationToken = default)
+    {
+        if (!dto.Id.HasValue)
+            throw new BusinessException("Expense id is required for update.");
+
+        await ValidateAsync(dto, cancellationToken);
+        await EnsureDefaultCategoriesAsync(dto.FlatId, cancellationToken);
+        await ValidateCategoryBelongsToFlatAsync(dto.FlatId, dto.ExpenseCategoryId, cancellationToken);
+
+        var expense = await expenseRepository.GetByIdForUpdateAsync(dto.Id.Value, cancellationToken)
+            ?? throw new BusinessException("Expense not found.");
+
+        if (expense.FlatId != dto.FlatId)
+            throw new BusinessException("Expense does not belong to this flat.");
+
+        expense.Title = dto.Title.Trim();
+        expense.Description = dto.Description?.Trim();
+        expense.Amount = dto.Amount;
+        expense.ExpenseDate = dto.ExpenseDate;
+        expense.ExpenseType = dto.ExpenseType;
+        expense.PaidByUserId = dto.PaidByUserId;
+        expense.ExpenseCategoryId = dto.ExpenseCategoryId;
+        expense.UpdatedAt = DateTime.UtcNow;
+        expenseRepository.Update(expense);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task DeleteExpenseAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var expense = await expenseRepository.GetByIdForUpdateAsync(id, cancellationToken);
-        if (expense is null) return;
+        var expense = await expenseRepository.GetByIdForUpdateAsync(id, cancellationToken)
+            ?? throw new BusinessException("Expense not found.");
 
         expenseRepository.Remove(expense);
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -75,8 +102,41 @@ public class ExpenseService(
 
     public async Task<IReadOnlyList<ExpenseCategoryDto>> GetCategoriesAsync(Guid flatId, CancellationToken cancellationToken = default)
     {
+        await EnsureDefaultCategoriesAsync(flatId, cancellationToken);
         var categories = await categoryRepository.GetByFlatIdAsync(flatId, cancellationToken);
         return categories.Select(c => new ExpenseCategoryDto { Id = c.Id, Name = c.Name }).ToList();
+    }
+
+    private async Task EnsureDefaultCategoriesAsync(Guid flatId, CancellationToken cancellationToken)
+    {
+        var categories = await categoryRepository.GetByFlatIdAsync(flatId, cancellationToken);
+        if (categories.Count > 0)
+            return;
+
+        foreach (var name in DefaultCategoryNames)
+        {
+            await categoryRepository.AddAsync(new ExpenseCategory
+            {
+                FlatId = flatId,
+                Name = name
+            }, cancellationToken);
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task ValidateCategoryBelongsToFlatAsync(Guid flatId, Guid categoryId, CancellationToken cancellationToken)
+    {
+        var categories = await categoryRepository.GetByFlatIdAsync(flatId, cancellationToken);
+        if (categories.All(c => c.Id != categoryId))
+            throw new BusinessException("Invalid expense category for this flat.");
+    }
+
+    private async Task ValidateAsync(ExpenseUpsertDto dto, CancellationToken cancellationToken)
+    {
+        var validation = await validator.ValidateAsync(dto, cancellationToken);
+        if (!validation.IsValid)
+            throw new BusinessException(string.Join(" ", validation.Errors.Select(e => e.ErrorMessage)));
     }
 
     private static ExpenseDto MapToDto(Expense expense) => new()
