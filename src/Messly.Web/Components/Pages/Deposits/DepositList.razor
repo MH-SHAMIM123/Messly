@@ -2,26 +2,29 @@
 @rendermode InteractiveServer
 @inject IDepositService DepositService
 @inject FlatContextService FlatContext
+@inject IJSRuntime Js
 
 <PageHeader Title="Deposits" Subtitle="Track member deposits" ActionText="Add Deposit" ActionUrl="/deposits/add" />
 <AlertMessage Message="@_error" />
+@if (!string.IsNullOrEmpty(_success)) { <div class="alert alert-success">@_success</div> }
 
-<DataTable ColumnCount="6" IsLoading="@_loading" IsEmpty="@(_items.Count == 0)" EmptyMessage="No deposits recorded yet.">
+<DataTable ColumnCount="4" IsLoading="@_loading" IsEmpty="@(_items.Count == 0)" EmptyMessage="No deposits recorded yet.">
     <HeadContent>
-        <th>Date</th><th>Member</th><th>Amount</th><th>Reference</th><th>Notes</th><th>Actions</th>
+        <th>Member</th>
+        <th>Amount</th>
+        <th>Date</th>
+        <th>Actions</th>
     </HeadContent>
     <BodyContent>
         @foreach (var item in _items)
         {
             <tr>
-                <td>@item.DepositDate.ToString("dd MMM yyyy")</td>
                 <td>@item.MemberName</td>
                 <td>@item.Amount.ToString("N2")</td>
-                <td>@(item.ReferenceNumber ?? "—")</td>
-                <td>@(item.Notes ?? "—")</td>
+                <td>@item.DepositDate.ToString("dd MMM yyyy")</td>
                 <td>
                     <a class="btn" href="/deposits/edit/@item.Id">Edit</a>
-                    <button type="button" class="btn" @onclick="() => DeleteAsync(item.Id)">Delete</button>
+                    <button type="button" class="btn" @onclick="() => DeleteAsync(item)">Delete</button>
                 </td>
             </tr>
         }
@@ -32,17 +35,44 @@
     private List<DepositDto> _items = [];
     private bool _loading = true;
     private string? _error;
+    private string? _success;
+
     protected override async Task OnInitializedAsync() => await LoadAsync();
+
     private async Task LoadAsync()
     {
         _loading = true;
-        try { _items = (await DepositService.GetDepositsAsync(FlatContext.CurrentFlatId)).ToList(); }
-        catch (Exception ex) { _error = ex.Message; }
-        finally { _loading = false; }
+        _error = null;
+        try
+        {
+            _items = (await DepositService.GetDepositsAsync(FlatContext.CurrentFlatId)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
-    private async Task DeleteAsync(Guid id)
+
+    private async Task DeleteAsync(DepositDto item)
     {
-        try { await DepositService.DeleteDepositAsync(id); await LoadAsync(); }
-        catch (Exception ex) { _error = ex.Message; }
+        var confirmed = await Js.InvokeAsync<bool>("confirm",
+            $"Delete deposit of {item.Amount:N2} for {item.MemberName}?");
+        if (!confirmed) return;
+
+        _success = null;
+        try
+        {
+            await DepositService.DeleteDepositAsync(item.Id);
+            _success = "Deposit deleted.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
     }
 }

@@ -9,25 +9,61 @@
 <PageHeader Title="@_title" Subtitle="Record member deposit" />
 <AlertMessage Message="@_error" />
 
-@if (!_loading)
+@if (_loading)
+{
+    <p>Loading...</p>
+}
+else if (_notFound)
+{
+    <p>Deposit not found.</p>
+    <a class="btn" href="/deposits">Back to list</a>
+}
+else if (_members.Count == 0)
+{
+    <p>Add at least one active member before recording deposits.</p>
+    <a class="btn" href="/members">Go to Members</a>
+}
+else
 {
     <div class="card">
         <EditForm Model="_model" OnValidSubmit="SaveAsync">
             <DataAnnotationsValidator />
+            <ValidationSummary />
             <div class="form-grid">
                 <div class="form-field">
                     <label>Member</label>
                     <InputSelect @bind-Value="_model.UserId">
-                        @foreach (var m in _members) { <option value="@m.UserId">@m.FullName</option> }
+                        <option value="">Select member</option>
+                        @foreach (var m in _members)
+                        {
+                            <option value="@m.UserId">@m.FullName</option>
+                        }
                     </InputSelect>
+                    <ValidationMessage For="() => _model.UserId" />
                 </div>
-                <div class="form-field"><label>Amount</label><InputNumber @bind-Value="_model.Amount" /></div>
-                <div class="form-field"><label>Date</label><InputDate @bind-Value="_date" /></div>
-                <div class="form-field"><label>Reference #</label><InputText @bind-Value="_model.ReferenceNumber" /></div>
-                <div class="form-field" style="grid-column:1/-1"><label>Notes</label><InputTextArea @bind-Value="_model.Notes" rows="2" /></div>
+                <div class="form-field">
+                    <label>Amount</label>
+                    <InputNumber @bind-Value="_model.Amount" />
+                    <ValidationMessage For="() => _model.Amount" />
+                </div>
+                <div class="form-field">
+                    <label>Date</label>
+                    <InputDate @bind-Value="_date" />
+                    <ValidationMessage For="() => _model.DepositDate" />
+                </div>
+                <div class="form-field">
+                    <label>Reference # (optional)</label>
+                    <InputText @bind-Value="_model.ReferenceNumber" />
+                </div>
+                <div class="form-field" style="grid-column:1/-1">
+                    <label>Notes (optional)</label>
+                    <InputTextArea @bind-Value="_model.Notes" rows="2" />
+                </div>
             </div>
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary" disabled="@_saving">Save Deposit</button>
+                <button type="submit" class="btn btn-primary" disabled="@_saving">
+                    @(_isEdit ? "Update Deposit" : "Add Deposit")
+                </button>
                 <a class="btn" href="/deposits">Cancel</a>
             </div>
         </EditForm>
@@ -36,52 +72,110 @@
 
 @code {
     [Parameter] public Guid? Id { get; set; }
+
     private DepositFormModel _model = new();
     private DateTime _date = DateTime.Today;
     private List<MemberDto> _members = [];
-    private bool _loading = true, _saving;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _notFound;
+    private bool _isEdit => Id.HasValue;
     private string? _error;
-    private string _title => Id.HasValue ? "Edit Deposit" : "Add Deposit";
+    private string _title => _isEdit ? "Edit Deposit" : "Add Deposit";
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    protected override async Task OnParametersSetAsync()
     {
-        _model.FlatId = FlatContext.CurrentFlatId;
-        _members = (await MemberService.GetMembersAsync(FlatContext.CurrentFlatId)).Where(m => m.IsActive).ToList();
+        if (!_loading)
+            await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _notFound = false;
+        _error = null;
+        _model = new DepositFormModel { FlatId = FlatContext.CurrentFlatId };
+
+        _members = (await MemberService.GetMembersAsync(FlatContext.CurrentFlatId))
+            .Where(m => m.IsActive)
+            .ToList();
+
         if (Id.HasValue)
         {
-            var d = await DepositService.GetDepositAsync(Id.Value);
-            if (d is not null)
+            var deposit = await DepositService.GetDepositAsync(Id.Value);
+            if (deposit is null)
             {
-                _model = new DepositFormModel { Id = d.Id, FlatId = d.FlatId, UserId = d.UserId, Amount = d.Amount, DepositDate = d.DepositDate, Notes = d.Notes, ReferenceNumber = d.ReferenceNumber };
-                _date = d.DepositDate.ToDateTime(TimeOnly.MinValue);
+                _notFound = true;
+            }
+            else
+            {
+                _model = new DepositFormModel
+                {
+                    Id = deposit.Id,
+                    FlatId = deposit.FlatId,
+                    UserId = deposit.UserId,
+                    Amount = deposit.Amount,
+                    DepositDate = deposit.DepositDate,
+                    Notes = deposit.Notes,
+                    ReferenceNumber = deposit.ReferenceNumber
+                };
+                _date = deposit.DepositDate.ToDateTime(TimeOnly.MinValue);
             }
         }
-        else if (_members.Count > 0) _model.UserId = _members[0].UserId;
+        else
+        {
+            _model.DepositDate = DateOnly.FromDateTime(_date);
+            if (_members.Count > 0)
+                _model.UserId = _members[0].UserId;
+        }
+
         _loading = false;
     }
 
     private async Task SaveAsync()
     {
         _saving = true;
+        _error = null;
         try
         {
-            await DepositService.SaveDepositAsync(new DepositUpsertDto
+            var dto = new DepositUpsertDto
             {
-                Id = _model.Id, FlatId = _model.FlatId, UserId = _model.UserId, Amount = _model.Amount,
-                DepositDate = DateOnly.FromDateTime(_date), Notes = _model.Notes, ReferenceNumber = _model.ReferenceNumber
-            });
+                Id = _model.Id,
+                FlatId = _model.FlatId,
+                UserId = _model.UserId,
+                Amount = _model.Amount,
+                DepositDate = DateOnly.FromDateTime(_date),
+                Notes = string.IsNullOrWhiteSpace(_model.Notes) ? null : _model.Notes.Trim(),
+                ReferenceNumber = string.IsNullOrWhiteSpace(_model.ReferenceNumber) ? null : _model.ReferenceNumber.Trim()
+            };
+
+            if (_isEdit)
+                await DepositService.UpdateDepositAsync(dto);
+            else
+                await DepositService.CreateDepositAsync(dto);
+
             Navigation.NavigateTo("/deposits");
         }
-        catch (Exception ex) { _error = ex.Message; }
-        finally { _saving = false; }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
     private sealed class DepositFormModel
     {
         public Guid? Id { get; set; }
         public Guid FlatId { get; set; }
+        [Required(ErrorMessage = "Member is required.")]
         public Guid UserId { get; set; }
-        [Range(0.01, double.MaxValue)] public decimal Amount { get; set; }
+        [Range(0.01, double.MaxValue, ErrorMessage = "Amount must be greater than zero.")]
+        public decimal Amount { get; set; }
         public DateOnly DepositDate { get; set; }
         public string? Notes { get; set; }
         public string? ReferenceNumber { get; set; }

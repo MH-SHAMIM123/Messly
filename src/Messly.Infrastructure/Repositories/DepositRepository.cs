@@ -7,6 +7,12 @@ namespace Messly.Infrastructure.Repositories;
 
 public class DepositRepository(MesslyDbContext context) : Repository<Deposit>(context), IDepositRepository
 {
+    public override async Task<Deposit?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        => await DbSet
+            .AsNoTracking()
+            .Include(d => d.User)
+            .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+
     public async Task<IReadOnlyList<Deposit>> GetByFlatIdAsync(Guid flatId, CancellationToken cancellationToken = default)
         => await DbSet
             .AsNoTracking()
