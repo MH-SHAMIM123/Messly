@@ -29,40 +29,27 @@ public class MemberService(
 
     public async Task<Guid> SaveMemberAsync(MemberUpsertDto dto, CancellationToken cancellationToken = default)
     {
-        var validation = await validator.ValidateAsync(dto, cancellationToken);
-        if (!validation.IsValid)
-            throw new BusinessException(string.Join(" ", validation.Errors.Select(e => e.ErrorMessage)));
-
-        var role = await roleRepository.GetByRoleTypeAsync(dto.RoleType, cancellationToken)
-            ?? throw new BusinessException("Invalid role.");
-
         if (dto.Id.HasValue)
         {
-            var member = await memberRepository.GetByIdWithDetailsAsync(dto.Id.Value, cancellationToken)
-                ?? throw new BusinessException("Member not found.");
-
-            var emailOwner = await userRepository.GetByEmailAsync(dto.Email.Trim(), cancellationToken);
-            if (emailOwner is not null && emailOwner.Id != member.UserId)
-                throw new BusinessException("Email is already used by another user.");
-
-            member.User!.FullName = dto.FullName.Trim();
-            member.User.Email = dto.Email.Trim();
-            member.User.Phone = dto.Phone?.Trim();
-            member.User.IsActive = dto.IsActive;
-            member.User.UpdatedAt = DateTime.UtcNow;
-            member.RoleId = role.Id;
-            member.IsActive = dto.IsActive;
-            member.UpdatedAt = DateTime.UtcNow;
-
-            userRepository.Update(member.User);
-            memberRepository.Update(member);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return member.Id;
+            await UpdateMemberAsync(dto, cancellationToken);
+            return dto.Id.Value;
         }
+
+        return await CreateMemberAsync(dto, cancellationToken);
+    }
+
+    public async Task<Guid> CreateMemberAsync(MemberUpsertDto dto, CancellationToken cancellationToken = default)
+    {
+        if (dto.Id.HasValue)
+            throw new BusinessException("Cannot create a member with an existing id. Use update instead.");
+
+        await ValidateAsync(dto, cancellationToken);
+
+        var role = await GetRoleAsync(dto.RoleType, cancellationToken);
 
         var existingUser = await userRepository.GetByEmailAsync(dto.Email.Trim(), cancellationToken);
         if (existingUser is not null)
-            throw new BusinessException("A user with this email already exists. Use a unique email for each member.");
+            throw new BusinessException("A user with this email already exists. Each member must have a unique email.");
 
         var user = new User
         {
@@ -86,6 +73,39 @@ public class MemberService(
         return flatMember.Id;
     }
 
+    public async Task UpdateMemberAsync(MemberUpsertDto dto, CancellationToken cancellationToken = default)
+    {
+        if (!dto.Id.HasValue)
+            throw new BusinessException("Member id is required for update.");
+
+        await ValidateAsync(dto, cancellationToken);
+
+        var role = await GetRoleAsync(dto.RoleType, cancellationToken);
+
+        var member = await memberRepository.GetByIdWithDetailsAsync(dto.Id.Value, cancellationToken)
+            ?? throw new BusinessException("Member not found.");
+
+        if (member.FlatId != dto.FlatId)
+            throw new BusinessException("Member does not belong to this flat.");
+
+        var emailOwner = await userRepository.GetByEmailAsync(dto.Email.Trim(), cancellationToken);
+        if (emailOwner is not null && emailOwner.Id != member.UserId)
+            throw new BusinessException("Email is already used by another user.");
+
+        member.User!.FullName = dto.FullName.Trim();
+        member.User.Email = dto.Email.Trim();
+        member.User.Phone = dto.Phone?.Trim();
+        member.User.IsActive = dto.IsActive;
+        member.User.UpdatedAt = DateTime.UtcNow;
+        member.RoleId = role.Id;
+        member.IsActive = dto.IsActive;
+        member.UpdatedAt = DateTime.UtcNow;
+
+        userRepository.Update(member.User);
+        memberRepository.Update(member);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task DeleteMemberAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var member = await memberRepository.GetByIdWithDetailsAsync(id, cancellationToken)
@@ -101,6 +121,17 @@ public class MemberService(
         memberRepository.Remove(member);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
+
+    private async Task ValidateAsync(MemberUpsertDto dto, CancellationToken cancellationToken)
+    {
+        var validation = await validator.ValidateAsync(dto, cancellationToken);
+        if (!validation.IsValid)
+            throw new BusinessException(string.Join(" ", validation.Errors.Select(e => e.ErrorMessage)));
+    }
+
+    private async Task<Role> GetRoleAsync(RoleType roleType, CancellationToken cancellationToken)
+        => await roleRepository.GetByRoleTypeAsync(roleType, cancellationToken)
+           ?? throw new BusinessException("Invalid role.");
 
     private static MemberDto MapToDto(FlatMember member) => new()
     {

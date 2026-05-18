@@ -2,20 +2,18 @@
 @rendermode InteractiveServer
 @inject IMemberService MemberService
 @inject FlatContextService FlatContext
-@inject NavigationManager Navigation
+@inject IJSRuntime Js
 
 <PageHeader Title="Members" Subtitle="Manage all mess members" ActionText="Add Member" ActionUrl="/members/add" />
 
 <AlertMessage Message="@_error" />
+@if (!string.IsNullOrEmpty(_success)) { <div class="alert alert-success">@_success</div> }
 
-<DataTable ColumnCount="7" IsLoading="@_loading" IsEmpty="@(_members.Count == 0)" EmptyMessage="No members found. Add your first member to get started.">
+<DataTable ColumnCount="4" IsLoading="@_loading" IsEmpty="@(_members.Count == 0)" EmptyMessage="No members found. Add your first member to get started.">
     <HeadContent>
         <th>Name</th>
         <th>Email</th>
-        <th>Phone</th>
         <th>Role</th>
-        <th>Joined</th>
-        <th>Status</th>
         <th>Actions</th>
     </HeadContent>
     <BodyContent>
@@ -24,13 +22,10 @@
             <tr>
                 <td>@member.FullName</td>
                 <td>@member.Email</td>
-                <td>@(member.Phone ?? "—")</td>
                 <td>@member.RoleName</td>
-                <td>@member.JoinedAt.ToString("dd MMM yyyy")</td>
-                <td>@(member.IsActive ? "Active" : "Inactive")</td>
                 <td>
                     <a class="btn" href="/members/edit/@member.Id">Edit</a>
-                    <button type="button" class="btn" @onclick="() => DeleteMember(member.Id)">Delete</button>
+                    <button type="button" class="btn" @onclick="() => DeleteMemberAsync(member)">Delete</button>
                 </td>
             </tr>
         }
@@ -41,6 +36,7 @@
     private List<MemberDto> _members = [];
     private bool _loading = true;
     private string? _error;
+    private string? _success;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -62,11 +58,16 @@
         }
     }
 
-    private async Task DeleteMember(Guid id)
+    private async Task DeleteMemberAsync(MemberDto member)
     {
+        var confirmed = await Js.InvokeAsync<bool>("confirm", $"Remove {member.FullName} from this flat?");
+        if (!confirmed) return;
+
+        _success = null;
         try
         {
-            await MemberService.DeleteMemberAsync(id);
+            await MemberService.DeleteMemberAsync(member.Id);
+            _success = $"{member.FullName} was removed.";
             await LoadAsync();
         }
         catch (Exception ex)

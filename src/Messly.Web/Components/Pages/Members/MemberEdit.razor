@@ -13,6 +13,11 @@
 {
     <p>Loading...</p>
 }
+else if (_notFound)
+{
+    <p>Member not found.</p>
+    <a class="btn" href="/members">Back to list</a>
+}
 else
 {
     <div class="card">
@@ -22,35 +27,38 @@ else
             <div class="form-grid">
                 <div class="form-field">
                     <label>Full Name</label>
-                    <InputText @bind-Value="_model.FullName" class="form-control" />
+                    <InputText @bind-Value="_model.FullName" />
                     <ValidationMessage For="() => _model.FullName" />
                 </div>
                 <div class="form-field">
                     <label>Email</label>
-                    <InputText @bind-Value="_model.Email" class="form-control" />
+                    <InputText @bind-Value="_model.Email" />
                     <ValidationMessage For="() => _model.Email" />
                 </div>
                 <div class="form-field">
                     <label>Phone</label>
-                    <InputText @bind-Value="_model.Phone" class="form-control" />
+                    <InputText @bind-Value="_model.Phone" />
+                    <ValidationMessage For="() => _model.Phone" />
                 </div>
                 <div class="form-field">
                     <label>Role</label>
-                    <InputSelect @bind-Value="_model.RoleType" class="form-control">
+                    <InputSelect @bind-Value="_model.RoleType">
                         <option value="@RoleType.Member">Member</option>
                         <option value="@RoleType.Manager">Manager</option>
                     </InputSelect>
+                    <ValidationMessage For="() => _model.RoleType" />
                 </div>
                 <div class="form-field">
-                    <label>Status</label>
-                    <InputSelect @bind-Value="_model.IsActive" class="form-control">
-                        <option value="true">Active</option>
-                        <option value="false">Inactive</option>
-                    </InputSelect>
+                    <label>
+                        <InputCheckbox @bind-Value="_model.IsActive" />
+                        Active member
+                    </label>
                 </div>
             </div>
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary" disabled="@_saving">Save Member</button>
+                <button type="submit" class="btn btn-primary" disabled="@_saving">
+                    @(_isEdit ? "Update Member" : "Add Member")
+                </button>
                 <a class="btn" href="/members">Cancel</a>
             </div>
         </EditForm>
@@ -63,18 +71,32 @@ else
     private MemberFormModel _model = new();
     private bool _loading = true;
     private bool _saving;
+    private bool _notFound;
+    private bool _isEdit => Id.HasValue;
     private string? _error;
-    private string _title => Id.HasValue ? "Edit Member" : "Add Member";
+    private string _title => _isEdit ? "Edit Member" : "Add Member";
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    protected override async Task OnParametersSetAsync()
     {
-        _model.FlatId = FlatContext.CurrentFlatId;
+        if (!_loading)
+            await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _notFound = false;
+        _error = null;
+        _model = new MemberFormModel { FlatId = FlatContext.CurrentFlatId };
+
         if (Id.HasValue)
         {
             var member = await MemberService.GetMemberAsync(Id.Value);
             if (member is null)
             {
-                _error = "Member not found.";
+                _notFound = true;
             }
             else
             {
@@ -90,6 +112,7 @@ else
                 };
             }
         }
+
         _loading = false;
     }
 
@@ -103,13 +126,18 @@ else
             {
                 Id = _model.Id,
                 FlatId = _model.FlatId,
-                FullName = _model.FullName,
-                Email = _model.Email,
-                Phone = _model.Phone,
+                FullName = _model.FullName.Trim(),
+                Email = _model.Email.Trim(),
+                Phone = string.IsNullOrWhiteSpace(_model.Phone) ? null : _model.Phone.Trim(),
                 RoleType = _model.RoleType,
                 IsActive = _model.IsActive
             };
-            await MemberService.SaveMemberAsync(dto);
+
+            if (_isEdit)
+                await MemberService.UpdateMemberAsync(dto);
+            else
+                await MemberService.CreateMemberAsync(dto);
+
             Navigation.NavigateTo("/members");
         }
         catch (Exception ex)
@@ -128,7 +156,7 @@ else
         public Guid FlatId { get; set; }
         [Required][StringLength(200)] public string FullName { get; set; } = string.Empty;
         [Required][EmailAddress] public string Email { get; set; } = string.Empty;
-        public string? Phone { get; set; }
+        [StringLength(20)] public string? Phone { get; set; }
         public RoleType RoleType { get; set; } = RoleType.Member;
         public bool IsActive { get; set; } = true;
     }
