@@ -1,0 +1,16 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+appsettings.Development.json
+userSecretsId.json
+[Dd]ebugPublic/
+[Rr]elease/
+.vscode/
+.idea/
+wwwroot/lib/
+logs/
+*.log
+Migrations/
+

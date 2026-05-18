@@ -1,0 +1,74 @@
+@page "/meals/entry"
+@rendermode InteractiveServer
+@inject IMealService MealService
+@inject FlatContextService FlatContext
+
+<PageHeader Title="Daily Meal Entry" Subtitle="Record breakfast, lunch, and dinner per member" />
+<AlertMessage Message="@_error" />
+
+<div class="tabs">
+    <a class="active" href="/meals/entry">Daily Entry</a>
+    <a href="/meals/summary">Monthly Summary</a>
+</div>
+
+<div class="card" style="margin-bottom:1rem">
+    <div class="form-field">
+        <label>Date</label>
+        <InputDate @bind-Value="_date" @bind-Value:after="LoadAsync" />
+    </div>
+</div>
+
+<DataTable ColumnCount="5" IsLoading="@_loading" IsEmpty="@(_entries.Count == 0)" EmptyMessage="No active members.">
+    <HeadContent>
+        <th>Member</th><th>Breakfast</th><th>Lunch</th><th>Dinner</th><th>Total</th>
+    </HeadContent>
+    <BodyContent>
+        @foreach (var entry in _entries)
+        {
+            <tr>
+                <td>@entry.MemberName</td>
+                <td><input type="number" min="0" max="3" @bind="entry.BreakfastCount" /></td>
+                <td><input type="number" min="0" max="3" @bind="entry.LunchCount" /></td>
+                <td><input type="number" min="0" max="3" @bind="entry.DinnerCount" /></td>
+                <td>@(entry.BreakfastCount + entry.LunchCount + entry.DinnerCount)</td>
+            </tr>
+        }
+    </BodyContent>
+</DataTable>
+
+<div class="form-actions">
+    <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="SaveAsync">Save Daily Meals</button>
+</div>
+
+@code {
+    private List<MealEntryDto> _entries = [];
+    private DateTime _date = DateTime.Today;
+    private bool _loading = true, _saving;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var date = DateOnly.FromDateTime(_date);
+            _entries = (await MealService.GetDailyEntriesAsync(FlatContext.CurrentFlatId, date)).ToList();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            await MealService.SaveDailyEntriesAsync(FlatContext.CurrentFlatId, DateOnly.FromDateTime(_date), _entries);
+            _error = null;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _saving = false; }
+    }
+}

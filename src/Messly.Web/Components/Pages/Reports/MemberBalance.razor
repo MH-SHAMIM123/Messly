@@ -1,0 +1,57 @@
+@page "/reports/balances"
+@rendermode InteractiveServer
+@inject IDashboardService DashboardService
+@inject FlatContextService FlatContext
+
+<PageHeader Title="Member Balances" Subtitle="Meal cost, deposits, and balance per member" />
+
+<div class="tabs">
+    <a href="/reports/monthly">Monthly Summary</a>
+    <a class="active" href="/reports/balances">Member Balances</a>
+</div>
+
+<div class="card" style="margin-bottom:1rem">
+    <input type="month" value="@_monthValue" @onchange="OnMonthChanged" />
+</div>
+
+<DataTable ColumnCount="5" IsLoading="@_loading" IsEmpty="@(_rows.Count == 0)" EmptyMessage="No balance data for this month.">
+    <HeadContent>
+        <th>Member</th><th>Meals</th><th>Meal Cost</th><th>Deposits</th><th>Balance</th>
+    </HeadContent>
+    <BodyContent>
+        @foreach (var row in _rows)
+        {
+            <tr>
+                <td>@row.MemberName</td>
+                <td>@row.TotalMeals</td>
+                <td>@row.MealCost.ToString("N2")</td>
+                <td>@row.TotalDeposits.ToString("N2")</td>
+                <td class="@(row.Balance < 0 ? "text-negative" : "")">@row.Balance.ToString("N2")</td>
+            </tr>
+        }
+    </BodyContent>
+</DataTable>
+
+@code {
+    private List<MemberBalanceDto> _rows = [];
+    private string _monthValue = DateTime.Today.ToString("yyyy-MM");
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task OnMonthChanged(ChangeEventArgs e)
+    {
+        _monthValue = e.Value?.ToString() ?? _monthValue;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        if (DateOnly.TryParse(_monthValue + "-01", out var first))
+        {
+            _rows = (await DashboardService.GetMemberBalancesAsync(FlatContext.CurrentFlatId, first.Year, first.Month)).ToList();
+        }
+        _loading = false;
+    }
+}

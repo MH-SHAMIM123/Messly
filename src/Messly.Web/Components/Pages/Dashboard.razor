@@ -1,0 +1,59 @@
+@page "/"
+@rendermode InteractiveServer
+@inject IDashboardService DashboardService
+@inject FlatContextService FlatContext
+
+<PageHeader Title="Dashboard" Subtitle="Overview for your mess flat (Manager view)" />
+
+@if (_loading)
+{
+    <p>Loading dashboard...</p>
+}
+else if (_dashboard is not null)
+{
+    <div class="dashboard-grid">
+        <div class="stat-card">
+            <div class="label">Total Members</div>
+            <div class="value">@_dashboard.TotalMembers</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Total Expense (This Month)</div>
+            <div class="value">@_dashboard.TotalExpense.ToString("N2")</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Total Meals</div>
+            <div class="value">@_dashboard.TotalMeals</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Meal Rate</div>
+            <div class="value">@_dashboard.MealRate.ToString("N2")</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Quick Actions</h3>
+        <p class="page-subtitle">Manage daily operations for your mess.</p>
+        <div class="form-actions">
+            <a class="btn btn-primary" href="/meals/entry">Enter Today's Meals</a>
+            <a class="btn" href="/expenses/add">Add Expense</a>
+            <a class="btn" href="/deposits/add">Record Deposit</a>
+        </div>
+    </div>
+}
+
+@code {
+    private DashboardDto? _dashboard;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _dashboard = await DashboardService.GetDashboardAsync(FlatContext.CurrentFlatId);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

@@ -1,0 +1,14 @@
+@page "/logout"
+@using Messly.Infrastructure.Identity
+@using Microsoft.AspNetCore.Identity
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@inject SignInManager<ApplicationUser> SignInManager
+@inject NavigationManager Navigation
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await SignInManager.SignOutAsync();
+        Navigation.NavigateTo("/login", true);
+    }
+}

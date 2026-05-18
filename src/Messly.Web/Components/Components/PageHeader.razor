@@ -1,0 +1,22 @@
+@using Messly.Web.ViewModels
+
+<div class="page-header">
+    <div>
+        <h1>@Title</h1>
+        @if (!string.IsNullOrWhiteSpace(Subtitle))
+        {
+            <p class="page-subtitle">@Subtitle</p>
+        }
+    </div>
+    @if (!string.IsNullOrWhiteSpace(ActionText) && !string.IsNullOrWhiteSpace(ActionUrl))
+    {
+        <a class="btn btn-primary" href="@ActionUrl">@ActionText</a>
+    }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? ActionText { get; set; }
+    [Parameter] public string? ActionUrl { get; set; }
+}

@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Messly.Api/Messly.Api.csproj" />
+    <Project Path="src/Messly.Application/Messly.Application.csproj" />
+    <Project Path="src/Messly.Domain/Messly.Domain.csproj" />
+    <Project Path="src/Messly.Infrastructure/Messly.Infrastructure.csproj" />
+    <Project Path="src/Messly.Web/Messly.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Messly.Tests/Messly.Tests.csproj" />
+  </Folder>
+</Solution>

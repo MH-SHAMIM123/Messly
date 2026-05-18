@@ -1,0 +1,52 @@
+@page "/expenses"
+@rendermode InteractiveServer
+@inject IExpenseService ExpenseService
+@inject FlatContextService FlatContext
+
+<PageHeader Title="Expenses" Subtitle="View and manage all flat expenses" ActionText="Add Expense" ActionUrl="/expenses/add" />
+<AlertMessage Message="@_error" />
+
+<DataTable ColumnCount="7" IsLoading="@_loading" IsEmpty="@(_items.Count == 0)" EmptyMessage="No expenses recorded yet.">
+    <HeadContent>
+        <th>Date</th><th>Title</th><th>Category</th><th>Paid By</th><th>Amount</th><th>Type</th><th>Actions</th>
+    </HeadContent>
+    <BodyContent>
+        @foreach (var item in _items)
+        {
+            <tr>
+                <td>@item.ExpenseDate.ToString("dd MMM yyyy")</td>
+                <td>@item.Title</td>
+                <td>@item.CategoryName</td>
+                <td>@item.PaidByName</td>
+                <td>@item.Amount.ToString("N2")</td>
+                <td>@item.ExpenseType</td>
+                <td>
+                    <a class="btn" href="/expenses/edit/@item.Id">Edit</a>
+                    <button type="button" class="btn" @onclick="() => DeleteAsync(item.Id)">Delete</button>
+                </td>
+            </tr>
+        }
+    </BodyContent>
+</DataTable>
+
+@code {
+    private List<ExpenseDto> _items = [];
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _items = (await ExpenseService.GetExpensesAsync(FlatContext.CurrentFlatId)).ToList(); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        try { await ExpenseService.DeleteExpenseAsync(id); await LoadAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+}

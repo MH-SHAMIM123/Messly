@@ -1,0 +1,60 @@
+@page "/meals/summary"
+@rendermode InteractiveServer
+@inject IMealService MealService
+@inject FlatContextService FlatContext
+
+<PageHeader Title="Meal Summary" Subtitle="Monthly meal totals per member" />
+
+<div class="tabs">
+    <a href="/meals/entry">Daily Entry</a>
+    <a class="active" href="/meals/summary">Monthly Summary</a>
+</div>
+
+<div class="card" style="margin-bottom:1rem">
+    <div class="form-field">
+        <label>Month</label>
+        <input type="month" value="@_monthValue" @onchange="OnMonthChanged" />
+    </div>
+</div>
+
+<DataTable ColumnCount="5" IsLoading="@_loading" IsEmpty="@(_rows.Count == 0)" EmptyMessage="No meal data for this month.">
+    <HeadContent>
+        <th>Member</th><th>Breakfast</th><th>Lunch</th><th>Dinner</th><th>Total</th>
+    </HeadContent>
+    <BodyContent>
+        @foreach (var row in _rows)
+        {
+            <tr>
+                <td>@row.MemberName</td>
+                <td>@row.TotalBreakfast</td>
+                <td>@row.TotalLunch</td>
+                <td>@row.TotalDinner</td>
+                <td>@row.GrandTotal</td>
+            </tr>
+        }
+    </BodyContent>
+</DataTable>
+
+@code {
+    private List<MealSummaryDto> _rows = [];
+    private string _monthValue = DateTime.Today.ToString("yyyy-MM");
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task OnMonthChanged(ChangeEventArgs e)
+    {
+        _monthValue = e.Value?.ToString() ?? _monthValue;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        if (DateOnly.TryParse(_monthValue + "-01", out var first))
+        {
+            _rows = (await MealService.GetMealTotalsByMonthAsync(FlatContext.CurrentFlatId, first.Year, first.Month)).ToList();
+        }
+        _loading = false;
+    }
+}

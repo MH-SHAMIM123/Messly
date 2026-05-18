@@ -1,0 +1,28 @@
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    @foreach (var column in Columns)
+                    {
+                        <th>@column</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @if (ShowEmptyState)
+                {
+                    <tr>
+                        <td colspan="@Columns.Count" class="empty-cell">@EmptyMessage</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<string> Columns { get; set; } = Array.Empty<string>();
+    [Parameter] public bool ShowEmptyState { get; set; } = true;
+    [Parameter] public string EmptyMessage { get; set; } = "No records yet. Data will appear here once implemented.";
+}

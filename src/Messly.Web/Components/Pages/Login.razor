@@ -1,0 +1,98 @@
+@page "/login"
+@using System.Security.Claims
+@using Messly.Infrastructure.Data
+@using Microsoft.EntityFrameworkCore
+@using Messly.Infrastructure.Identity
+@using Microsoft.AspNetCore.Identity
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+@inject MesslyDbContext DbContext
+@inject NavigationManager Navigation
+@inject IConfiguration Configuration
+
+<PageTitle>Login - Messly</PageTitle>
+
+<div class="login-card card">
+    <h1>Messly</h1>
+    <p class="page-subtitle">Manager sign in</p>
+    <AlertMessage Message="@_error" />
+    <EditForm Model="_model" OnValidSubmit="LoginAsync">
+        <div class="form-field">
+            <label>Email</label>
+            <InputText @bind-Value="_model.Email" class="form-control" />
+        </div>
+        <div class="form-field">
+            <label>Password</label>
+            <InputText type="password" @bind-Value="_model.Password" class="form-control" />
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" disabled="@_loading">Sign In</button>
+        </div>
+    </EditForm>
+    <p class="page-subtitle" style="margin-top:1rem">Dev default: manager@messly.local / Manager@123</p>
+</div>
+
+@code {
+    private LoginModel _model = new();
+    private string? _error;
+    private bool _loading;
+
+    private async Task LoginAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var user = await UserManager.FindByEmailAsync(_model.Email);
+            if (user is null)
+            {
+                _error = "Invalid login attempt.";
+                return;
+            }
+
+            var result = await SignInManager.PasswordSignInAsync(user, _model.Password, isPersistent: true, lockoutOnFailure: false);
+            if (!result.Succeeded)
+            {
+                _error = "Invalid login attempt.";
+                return;
+            }
+
+            var flatId = Guid.TryParse(Configuration["Messly:DefaultFlatId"], out var id)
+                ? id
+                : DevDataSeeder.DefaultFlatId;
+
+            var membership = await DbContext.FlatMembers
+                .Include(fm => fm.Role)
+                .FirstOrDefaultAsync(fm => fm.UserId == user.DomainUserId && fm.FlatId == flatId);
+
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim("flat_id", flatId.ToString())
+            };
+            if (membership?.Role?.RoleType is not null)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, membership.Role.RoleType.ToString()));
+            }
+
+            await SignInManager.SignInWithClaimsAsync(user, isPersistent: true, claims);
+            Navigation.NavigateTo("/", true);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private sealed class LoginModel
+    {
+        public string Email { get; set; } = "manager@messly.local";
+        public string Password { get; set; } = string.Empty;
+    }
+}

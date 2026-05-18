@@ -1,0 +1,89 @@
+@page "/deposits/add"
+@page "/deposits/edit/{Id:guid}"
+@rendermode InteractiveServer
+@inject IDepositService DepositService
+@inject IMemberService MemberService
+@inject FlatContextService FlatContext
+@inject NavigationManager Navigation
+
+<PageHeader Title="@_title" Subtitle="Record member deposit" />
+<AlertMessage Message="@_error" />
+
+@if (!_loading)
+{
+    <div class="card">
+        <EditForm Model="_model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <div class="form-grid">
+                <div class="form-field">
+                    <label>Member</label>
+                    <InputSelect @bind-Value="_model.UserId">
+                        @foreach (var m in _members) { <option value="@m.UserId">@m.FullName</option> }
+                    </InputSelect>
+                </div>
+                <div class="form-field"><label>Amount</label><InputNumber @bind-Value="_model.Amount" /></div>
+                <div class="form-field"><label>Date</label><InputDate @bind-Value="_date" /></div>
+                <div class="form-field"><label>Reference #</label><InputText @bind-Value="_model.ReferenceNumber" /></div>
+                <div class="form-field" style="grid-column:1/-1"><label>Notes</label><InputTextArea @bind-Value="_model.Notes" rows="2" /></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" disabled="@_saving">Save Deposit</button>
+                <a class="btn" href="/deposits">Cancel</a>
+            </div>
+        </EditForm>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    private DepositFormModel _model = new();
+    private DateTime _date = DateTime.Today;
+    private List<MemberDto> _members = [];
+    private bool _loading = true, _saving;
+    private string? _error;
+    private string _title => Id.HasValue ? "Edit Deposit" : "Add Deposit";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _model.FlatId = FlatContext.CurrentFlatId;
+        _members = (await MemberService.GetMembersAsync(FlatContext.CurrentFlatId)).Where(m => m.IsActive).ToList();
+        if (Id.HasValue)
+        {
+            var d = await DepositService.GetDepositAsync(Id.Value);
+            if (d is not null)
+            {
+                _model = new DepositFormModel { Id = d.Id, FlatId = d.FlatId, UserId = d.UserId, Amount = d.Amount, DepositDate = d.DepositDate, Notes = d.Notes, ReferenceNumber = d.ReferenceNumber };
+                _date = d.DepositDate.ToDateTime(TimeOnly.MinValue);
+            }
+        }
+        else if (_members.Count > 0) _model.UserId = _members[0].UserId;
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            await DepositService.SaveDepositAsync(new DepositUpsertDto
+            {
+                Id = _model.Id, FlatId = _model.FlatId, UserId = _model.UserId, Amount = _model.Amount,
+                DepositDate = DateOnly.FromDateTime(_date), Notes = _model.Notes, ReferenceNumber = _model.ReferenceNumber
+            });
+            Navigation.NavigateTo("/deposits");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private sealed class DepositFormModel
+    {
+        public Guid? Id { get; set; }
+        public Guid FlatId { get; set; }
+        public Guid UserId { get; set; }
+        [Range(0.01, double.MaxValue)] public decimal Amount { get; set; }
+        public DateOnly DepositDate { get; set; }
+        public string? Notes { get; set; }
+        public string? ReferenceNumber { get; set; }
+    }
+}

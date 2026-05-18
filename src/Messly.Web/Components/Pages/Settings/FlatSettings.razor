@@ -1,0 +1,53 @@
+@page "/settings"
+@rendermode InteractiveServer
+@inject IDashboardService DashboardService
+@inject FlatContextService FlatContext
+
+<PageHeader Title="Settings" Subtitle="Flat information and configuration" />
+<AlertMessage Message="@_error" />
+@if (_success) { <div class="alert alert-success">Settings saved.</div> }
+
+<div class="card">
+    <h3>Flat Information</h3>
+    <EditForm Model="_model" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <div class="form-grid">
+            <div class="form-field"><label>Flat Name</label><InputText @bind-Value="_model.Name" /></div>
+            <div class="form-field"><label>Address</label><InputText @bind-Value="_model.Address" /></div>
+            <div class="form-field"><label>Default Meal Rate</label><InputNumber @bind-Value="_model.DefaultMealRate" /></div>
+            <div class="form-field"><label>Billing Day</label><InputNumber @bind-Value="_model.BillingDayOfMonth" /></div>
+            <div class="form-field" style="grid-column:1/-1"><label>Description</label><InputTextArea @bind-Value="_model.Description" rows="3" /></div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" disabled="@_saving">Save Settings</button>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private FlatDto _model = new();
+    private bool _saving;
+    private string? _error;
+    private bool _success;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var flat = await DashboardService.GetFlatSettingsAsync(FlatContext.CurrentFlatId);
+        if (flat is not null) _model = flat;
+        _model.Id = FlatContext.CurrentFlatId;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _success = false;
+        try
+        {
+            await DashboardService.SaveFlatSettingsAsync(_model);
+            _success = true;
+            _error = null;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _saving = false; }
+    }
+}

@@ -1,0 +1,32 @@
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>@HeadContent</tr>
+            </thead>
+            <tbody>
+                @if (IsLoading)
+                {
+                    <tr><td colspan="@ColumnCount" class="empty-cell">Loading...</td></tr>
+                }
+                else if (IsEmpty)
+                {
+                    <tr><td colspan="@ColumnCount" class="empty-cell">@EmptyMessage</td></tr>
+                }
+                else
+                {
+                    @BodyContent
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? HeadContent { get; set; }
+    [Parameter] public RenderFragment? BodyContent { get; set; }
+    [Parameter] public int ColumnCount { get; set; } = 1;
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public bool IsEmpty { get; set; }
+    [Parameter] public string EmptyMessage { get; set; } = "No records found.";
+}

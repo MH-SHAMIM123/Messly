@@ -1,0 +1,114 @@
+@page "/expenses/add"
+@page "/expenses/edit/{Id:guid}"
+@rendermode InteractiveServer
+@inject IExpenseService ExpenseService
+@inject IMemberService MemberService
+@inject FlatContextService FlatContext
+@inject NavigationManager Navigation
+
+<PageHeader Title="@_title" Subtitle="Record a mess expense" />
+<AlertMessage Message="@_error" />
+
+@if (!_loading)
+{
+    <div class="card">
+        <EditForm Model="_model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-grid">
+                <div class="form-field"><label>Title</label><InputText @bind-Value="_model.Title" /><ValidationMessage For="() => _model.Title" /></div>
+                <div class="form-field"><label>Amount</label><InputNumber @bind-Value="_model.Amount" /></div>
+                <div class="form-field"><label>Date</label><InputDate @bind-Value="_date" /></div>
+                <div class="form-field">
+                    <label>Category</label>
+                    <InputSelect @bind-Value="_model.ExpenseCategoryId">
+                        @foreach (var c in _categories) { <option value="@c.Id">@c.Name</option> }
+                    </InputSelect>
+                </div>
+                <div class="form-field">
+                    <label>Paid By</label>
+                    <InputSelect @bind-Value="_model.PaidByUserId">
+                        @foreach (var m in _members) { <option value="@m.UserId">@m.FullName</option> }
+                    </InputSelect>
+                </div>
+                <div class="form-field">
+                    <label>Expense Type</label>
+                    <InputSelect @bind-Value="_model.ExpenseType">
+                        @foreach (ExpenseType t in Enum.GetValues<ExpenseType>()) { <option value="@t">@t</option> }
+                    </InputSelect>
+                </div>
+                <div class="form-field" style="grid-column:1/-1"><label>Description</label><InputTextArea @bind-Value="_model.Description" rows="3" /></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" disabled="@_saving">Save Expense</button>
+                <a class="btn" href="/expenses">Cancel</a>
+            </div>
+        </EditForm>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    private ExpenseFormModel _model = new();
+    private DateTime _date = DateTime.Today;
+    private List<ExpenseCategoryDto> _categories = [];
+    private List<MemberDto> _members = [];
+    private bool _loading = true, _saving;
+    private string? _error;
+    private string _title => Id.HasValue ? "Edit Expense" : "Add Expense";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _model.FlatId = FlatContext.CurrentFlatId;
+        _categories = (await ExpenseService.GetCategoriesAsync(FlatContext.CurrentFlatId)).ToList();
+        _members = (await MemberService.GetMembersAsync(FlatContext.CurrentFlatId)).Where(m => m.IsActive).ToList();
+        if (Id.HasValue)
+        {
+            var e = await ExpenseService.GetExpenseAsync(Id.Value);
+            if (e is not null)
+            {
+                _model = new ExpenseFormModel
+                {
+                    Id = e.Id, FlatId = e.FlatId, Title = e.Title, Description = e.Description,
+                    Amount = e.Amount, ExpenseDate = e.ExpenseDate, ExpenseType = e.ExpenseType,
+                    PaidByUserId = e.PaidByUserId, ExpenseCategoryId = e.ExpenseCategoryId
+                };
+                _date = e.ExpenseDate.ToDateTime(TimeOnly.MinValue);
+            }
+        }
+        else if (_members.Count > 0) _model.PaidByUserId = _members[0].UserId;
+        if (_categories.Count > 0 && _model.ExpenseCategoryId == Guid.Empty) _model.ExpenseCategoryId = _categories[0].Id;
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            _model.ExpenseDate = DateOnly.FromDateTime(_date);
+            await ExpenseService.SaveExpenseAsync(new ExpenseUpsertDto
+            {
+                Id = _model.Id, FlatId = _model.FlatId, Title = _model.Title, Description = _model.Description,
+                Amount = _model.Amount, ExpenseDate = _model.ExpenseDate, ExpenseType = _model.ExpenseType,
+                PaidByUserId = _model.PaidByUserId, ExpenseCategoryId = _model.ExpenseCategoryId
+            });
+            Navigation.NavigateTo("/expenses");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private sealed class ExpenseFormModel
+    {
+        public Guid? Id { get; set; }
+        public Guid FlatId { get; set; }
+        [Required] public string Title { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        [Range(0.01, double.MaxValue)] public decimal Amount { get; set; }
+        public DateOnly ExpenseDate { get; set; }
+        public ExpenseType ExpenseType { get; set; } = ExpenseType.Grocery;
+        public Guid PaidByUserId { get; set; }
+        public Guid ExpenseCategoryId { get; set; }
+    }
+}

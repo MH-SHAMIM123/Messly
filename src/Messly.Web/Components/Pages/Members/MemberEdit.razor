@@ -1,0 +1,135 @@
+@page "/members/add"
+@page "/members/edit/{Id:guid}"
+@rendermode InteractiveServer
+@inject IMemberService MemberService
+@inject FlatContextService FlatContext
+@inject NavigationManager Navigation
+
+<PageHeader Title="@_title" Subtitle="Add or update member details" />
+
+<AlertMessage Message="@_error" />
+
+@if (_loading)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="card">
+        <EditForm Model="_model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-grid">
+                <div class="form-field">
+                    <label>Full Name</label>
+                    <InputText @bind-Value="_model.FullName" class="form-control" />
+                    <ValidationMessage For="() => _model.FullName" />
+                </div>
+                <div class="form-field">
+                    <label>Email</label>
+                    <InputText @bind-Value="_model.Email" class="form-control" />
+                    <ValidationMessage For="() => _model.Email" />
+                </div>
+                <div class="form-field">
+                    <label>Phone</label>
+                    <InputText @bind-Value="_model.Phone" class="form-control" />
+                </div>
+                <div class="form-field">
+                    <label>Role</label>
+                    <InputSelect @bind-Value="_model.RoleType" class="form-control">
+                        <option value="@RoleType.Member">Member</option>
+                        <option value="@RoleType.Manager">Manager</option>
+                    </InputSelect>
+                </div>
+                <div class="form-field">
+                    <label>Status</label>
+                    <InputSelect @bind-Value="_model.IsActive" class="form-control">
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                    </InputSelect>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" disabled="@_saving">Save Member</button>
+                <a class="btn" href="/members">Cancel</a>
+            </div>
+        </EditForm>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private MemberFormModel _model = new();
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private string _title => Id.HasValue ? "Edit Member" : "Add Member";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _model.FlatId = FlatContext.CurrentFlatId;
+        if (Id.HasValue)
+        {
+            var member = await MemberService.GetMemberAsync(Id.Value);
+            if (member is null)
+            {
+                _error = "Member not found.";
+            }
+            else
+            {
+                _model = new MemberFormModel
+                {
+                    Id = member.Id,
+                    FlatId = member.FlatId,
+                    FullName = member.FullName,
+                    Email = member.Email,
+                    Phone = member.Phone,
+                    RoleType = member.RoleType,
+                    IsActive = member.IsActive
+                };
+            }
+        }
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var dto = new MemberUpsertDto
+            {
+                Id = _model.Id,
+                FlatId = _model.FlatId,
+                FullName = _model.FullName,
+                Email = _model.Email,
+                Phone = _model.Phone,
+                RoleType = _model.RoleType,
+                IsActive = _model.IsActive
+            };
+            await MemberService.SaveMemberAsync(dto);
+            Navigation.NavigateTo("/members");
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private sealed class MemberFormModel
+    {
+        public Guid? Id { get; set; }
+        public Guid FlatId { get; set; }
+        [Required][StringLength(200)] public string FullName { get; set; } = string.Empty;
+        [Required][EmailAddress] public string Email { get; set; } = string.Empty;
+        public string? Phone { get; set; }
+        public RoleType RoleType { get; set; } = RoleType.Member;
+        public bool IsActive { get; set; } = true;
+    }
+}

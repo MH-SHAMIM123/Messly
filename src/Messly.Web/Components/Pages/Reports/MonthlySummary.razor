@@ -1,0 +1,61 @@
+@page "/reports/monthly"
+@rendermode InteractiveServer
+@inject IDashboardService DashboardService
+@inject IBillingCalculationService BillingService
+@inject FlatContextService FlatContext
+
+<PageHeader Title="Monthly Summary" Subtitle="Consolidated monthly mess report" />
+
+<div class="tabs">
+    <a class="active" href="/reports/monthly">Monthly Summary</a>
+    <a href="/reports/balances">Member Balances</a>
+</div>
+
+<div class="card" style="margin-bottom:1rem">
+    <input type="month" value="@_monthValue" @onchange="OnMonthChanged" />
+    <button type="button" class="btn btn-primary" style="margin-left:0.5rem" @onclick="RegenerateAsync">Recalculate</button>
+</div>
+
+@if (_summary is not null)
+{
+    <div class="dashboard-grid">
+        <div class="stat-card"><div class="label">Total Expenses</div><div class="value">@_summary.TotalExpenses.ToString("N2")</div></div>
+        <div class="stat-card"><div class="label">Total Deposits</div><div class="value">@_summary.TotalDeposits.ToString("N2")</div></div>
+        <div class="stat-card"><div class="label">Total Meals</div><div class="value">@_summary.TotalMeals</div></div>
+        <div class="stat-card"><div class="label">Meal Rate</div><div class="value">@_summary.MealRate.ToString("N2")</div></div>
+        <div class="stat-card"><div class="label">Net Balance</div><div class="value">@_summary.NetBalance.ToString("N2")</div></div>
+    </div>
+}
+
+<AlertMessage Message="@_error" />
+
+@code {
+    private MonthlySummaryDto? _summary;
+    private string _monthValue = DateTime.Today.ToString("yyyy-MM");
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task OnMonthChanged(ChangeEventArgs e)
+    {
+        _monthValue = e.Value?.ToString() ?? _monthValue;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (!DateOnly.TryParse(_monthValue + "-01", out var first)) return;
+        _summary = await DashboardService.GetFinancialSummaryAsync(FlatContext.CurrentFlatId, first.Year, first.Month);
+    }
+
+    private async Task RegenerateAsync()
+    {
+        try
+        {
+            if (!DateOnly.TryParse(_monthValue + "-01", out var first)) return;
+            await BillingService.GenerateMonthlySummaryAsync(FlatContext.CurrentFlatId, first.Year, first.Month);
+            await LoadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+}

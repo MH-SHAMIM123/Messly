@@ -1,0 +1,77 @@
+@page "/members"
+@rendermode InteractiveServer
+@inject IMemberService MemberService
+@inject FlatContextService FlatContext
+@inject NavigationManager Navigation
+
+<PageHeader Title="Members" Subtitle="Manage all mess members" ActionText="Add Member" ActionUrl="/members/add" />
+
+<AlertMessage Message="@_error" />
+
+<DataTable ColumnCount="7" IsLoading="@_loading" IsEmpty="@(_members.Count == 0)" EmptyMessage="No members found. Add your first member to get started.">
+    <HeadContent>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Phone</th>
+        <th>Role</th>
+        <th>Joined</th>
+        <th>Status</th>
+        <th>Actions</th>
+    </HeadContent>
+    <BodyContent>
+        @foreach (var member in _members)
+        {
+            <tr>
+                <td>@member.FullName</td>
+                <td>@member.Email</td>
+                <td>@(member.Phone ?? "—")</td>
+                <td>@member.RoleName</td>
+                <td>@member.JoinedAt.ToString("dd MMM yyyy")</td>
+                <td>@(member.IsActive ? "Active" : "Inactive")</td>
+                <td>
+                    <a class="btn" href="/members/edit/@member.Id">Edit</a>
+                    <button type="button" class="btn" @onclick="() => DeleteMember(member.Id)">Delete</button>
+                </td>
+            </tr>
+        }
+    </BodyContent>
+</DataTable>
+
+@code {
+    private List<MemberDto> _members = [];
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _members = (await MemberService.GetMembersAsync(FlatContext.CurrentFlatId)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task DeleteMember(Guid id)
+    {
+        try
+        {
+            await MemberService.DeleteMemberAsync(id);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}
