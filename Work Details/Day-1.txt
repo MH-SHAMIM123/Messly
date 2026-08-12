@@ -1,0 +1,1111 @@
+You are a team of 30+ senior security engineers, .NET architects, and penetration testers.
+
+
+
+You are auditing a production-level SaaS system called "Messly" built with:
+
+
+
+- .NET 10 Clean Architecture
+
+- Blazor Server
+
+- EF Core
+
+- Repository + Service pattern
+
+- SQL Server
+
+- Separate API project
+
+
+
+--------------------------------------------------
+
+YOUR TASK IS SECURITY-FIRST FULL SYSTEM AUDIT
+
+(@codebase ACCESS REQUIRED)
+
+--------------------------------------------------
+
+
+
+IMPORTANT RULE:
+
+- DO NOT CHANGE CODE
+
+- DO NOT FIX ANYTHING YET
+
+- ONLY ANALYZE AND PRODUCE A SECURITY PLAN
+
+
+
+--------------------------------------------------
+
+STEP 1: FULL SYSTEM SECURITY MAPPING
+
+--------------------------------------------------
+
+
+
+Analyze entire system and map:
+
+
+
+- All entry points (Web + API)
+
+- All service layer methods
+
+- All repository access points
+
+- All DbContext queries
+
+
+
+Create a FULL DATA FLOW MAP:
+
+User → UI → Service → Repository → DB
+
+
+
+--------------------------------------------------
+
+STEP 2: TENANT ISOLATION AUDIT (CRITICAL)
+
+
+
+Check everywhere:
+
+
+
+- Is FlatId enforced in every query?
+
+- Can any method access data without FlatId filter?
+
+- Any missing flat ownership validation?
+
+
+
+Detect:
+
+- Cross-flat data access risks
+
+- Silent data leakage paths
+
+- Missing tenant filtering
+
+
+
+--------------------------------------------------
+
+STEP 3: IDOR (Insecure Direct Object Reference)
+
+
+
+Check all methods:
+
+
+
+- GetByIdAsync
+
+- UpdateAsync
+
+- DeleteAsync
+
+
+
+Find:
+
+- Places where GUID alone is used
+
+- Missing FlatId + Id validation
+
+- Any unsafe entity loading
+
+
+
+--------------------------------------------------
+
+STEP 4: AUTHORIZATION AUDIT
+
+
+
+Check:
+
+
+
+- Who can call which service method?
+
+- Are roles (Manager/Member) enforced?
+
+- Any missing authorization attributes?
+
+- Any bypass via API?
+
+
+
+--------------------------------------------------
+
+STEP 5: API SECURITY AUDIT
+
+
+
+- Check JWT implementation status
+
+- Check missing login/token flow
+
+- Check if API can be called without proper auth
+
+- Check if FlatId is trusted from client (danger)
+
+
+
+--------------------------------------------------
+
+STEP 6: DATA INTEGRITY CHECK
+
+
+
+Check:
+
+
+
+- Expense PaidByUserId belongs to flat?
+
+- Meal UserId belongs to flat?
+
+- Deposit UserId belongs to flat?
+
+
+
+Detect:
+
+- Foreign key trust issues
+
+- Fake data injection possibilities
+
+
+
+--------------------------------------------------
+
+STEP 7: CONFIG & PRODUCTION RISKS
+
+
+
+Check:
+
+
+
+- Hardcoded secrets (JWT keys, connection strings)
+
+- Auto migration in production
+
+- Environment configuration issues
+
+
+
+--------------------------------------------------
+
+STEP 8: FINAL OUTPUT (VERY IMPORTANT)
+
+
+
+Provide:
+
+
+
+1. SECURITY RISK REPORT
+
+   - CRITICAL (must fix immediately)
+
+   - HIGH RISK
+
+   - MEDIUM RISK
+
+   - LOW RISK
+
+
+
+2. ATTACK SCENARIOS (REAL WORLD)
+
+   - How attacker can break system
+
+
+
+3. SECURITY ARCHITECTURE SCORE (0–10)
+
+
+
+4. STEP-BY-STEP FIX PLAN
+
+   - Fix order (what to fix first)
+
+   - What NOT to touch yet
+
+
+
+5. SAFE ARCHITECTURE DESIGN (RECOMMENDED)
+
+   - How Flat isolation should be enforced
+
+   - Where checks should live (Middleware / Service / Repo)
+
+
+
+--------------------------------------------------
+
+
+
+IMPORTANT RULES:
+
+
+
+- DO NOT write fix code yet
+
+- DO NOT refactor architecture yet
+
+- ONLY produce deep security analysis
+
+- Think like a penetration tester + FAANG architect
+
+You are a senior FAANG-level .NET security architect and backend engineer.
+
+
+
+You are working on a production SaaS system called "Messly" built with:
+
+
+
+- .NET 10 Clean Architecture
+
+- Blazor Server
+
+- EF Core
+
+- Repository + Service pattern
+
+- SQL Server
+
+- Separate API project
+
+
+
+--------------------------------------------------
+
+🚨 CRITICAL RULES
+
+--------------------------------------------------
+
+
+
+- DO NOT change business logic (Meal, Expense, Deposit, Calculation logic must remain same)
+
+- DO NOT add new features
+
+- DO NOT redesign UI
+
+- ONLY fix security, authorization, and tenant isolation
+
+- DO NOT break existing module flows
+
+
+
+--------------------------------------------------
+
+🎯 MAIN GOAL
+
+--------------------------------------------------
+
+
+
+Transform the system into a secure multi-tenant SaaS:
+
+
+
+✔ No cross-flat data access possible
+
+✔ No IDOR vulnerabilities
+
+✔ No client-trusted FlatId or UserId
+
+✔ Full RBAC enforcement (Manager vs Member)
+
+✔ API and Web both tenant-safe
+
+
+
+--------------------------------------------------
+
+STEP 1: CREATE CENTRAL TENANT SECURITY CORE
+
+--------------------------------------------------
+
+
+
+Create a proper security foundation:
+
+
+
+1. Create ITenantContext (scoped service)
+
+   - FlatId (from authenticated user claims ONLY)
+
+   - UserId
+
+   - RoleType
+
+
+
+2. Replace ALL usage of:
+
+   - FlatContextService fallback logic
+
+   - config-based DefaultFlatId
+
+   - DTO-based FlatId trust
+
+
+
+3. Ensure tenant context is the ONLY source of truth
+
+
+
+--------------------------------------------------
+
+STEP 2: ENFORCE TENANT ISOLATION (CRITICAL)
+
+--------------------------------------------------
+
+
+
+For EVERY service method in:
+
+
+
+- MemberService
+
+- ExpenseService
+
+- DepositService
+
+- MealService
+
+- BillingCalculationService
+
+- DashboardService
+
+
+
+DO:
+
+
+
+1. Always enforce:
+
+   entity.FlatId == ITenantContext.FlatId
+
+
+
+2. Never allow:
+
+   - Passing FlatId from client DTO without validation
+
+   - Cross-flat query results
+
+   - Global GetById without FlatId filter
+
+
+
+3. Replace all repository calls:
+
+
+
+   FROM:
+
+     GetByIdAsync(id)
+
+
+
+   TO:
+
+     GetByIdAsync(id, flatId)
+
+     OR
+
+     GetByIdAndFlatAsync(id, flatId)
+
+
+
+--------------------------------------------------
+
+STEP 3: FIX IDOR (CRITICAL SECURITY HOLE)
+
+--------------------------------------------------
+
+
+
+Fix ALL endpoints and services:
+
+
+
+- GetMemberAsync
+
+- GetExpenseAsync
+
+- GetDepositAsync
+
+- GetMealAsync
+
+- Delete operations
+
+
+
+RULE:
+
+
+
+✔ Always require FlatId match on read/update/delete
+
+✔ If mismatch → throw SecurityException or NotFound (do NOT leak existence)
+
+
+
+--------------------------------------------------
+
+STEP 4: REMOVE CLIENT TRUSTED INPUT
+
+--------------------------------------------------
+
+
+
+CRITICAL RULE:
+
+
+
+DO NOT TRUST:
+
+
+
+- DTO.FlatId
+
+- DTO.UserId (for PaidBy / Deposit / Meal)
+
+
+
+Instead:
+
+
+
+✔ FlatId → from ITenantContext only
+
+✔ UserId → validate via FlatMember table
+
+
+
+--------------------------------------------------
+
+STEP 5: ROLE-BASED ACCESS CONTROL (RBAC)
+
+--------------------------------------------------
+
+
+
+Implement authorization rules:
+
+
+
+MANAGER ONLY:
+
+- Delete Member
+
+- Delete Expense
+
+- Delete Deposit
+
+- Settings update
+
+- Billing recalculation save
+
+- Role assignment
+
+
+
+MEMBER:
+
+- Read-only access (limited write allowed for own entries only if needed)
+
+
+
+Enforce in SERVICE LAYER (NOT UI ONLY)
+
+
+
+--------------------------------------------------
+
+STEP 6: API SECURITY HARDENING
+
+--------------------------------------------------
+
+
+
+Fix Messly.Api:
+
+
+
+1. Implement JWT login/token endpoint (if missing)
+
+2. FlatId must come ONLY from JWT claims
+
+3. Remove all /api/{flatId} trust from URL
+
+4. Replace with:
+
+
+
+   /api/me/members
+
+   /api/me/expenses
+
+   /api/me/deposits
+
+
+
+5. Validate token issuer + audience
+
+6. Remove weak/hardcoded signing keys
+
+
+
+--------------------------------------------------
+
+STEP 7: DATA INTEGRITY FIX
+
+--------------------------------------------------
+
+
+
+Validate before saving:
+
+
+
+- Expense.PaidByUserId ∈ FlatMembers
+
+- Deposit.UserId ∈ FlatMembers
+
+- Meal.UserId ∈ FlatMembers
+
+
+
+Reject invalid foreign keys immediately
+
+
+
+--------------------------------------------------
+
+STEP 8: REPOSITORY SAFETY HARDENING
+
+--------------------------------------------------
+
+
+
+Update repository layer:
+
+
+
+- Add flat-aware methods:
+
+  GetByIdAsync(id, flatId)
+
+  GetAllByFlatAsync(flatId)
+
+
+
+- Prevent accidental usage of global GetAllAsync in services
+
+
+
+--------------------------------------------------
+
+STEP 9: ERROR HANDLING SECURITY FIX
+
+--------------------------------------------------
+
+
+
+- Replace raw exception messages in UI
+
+- Never expose ex.Message to client
+
+- Use safe error responses only
+
+
+
+--------------------------------------------------
+
+STEP 10: FINAL OUTPUT REQUIRED
+
+--------------------------------------------------
+
+
+
+After implementation provide:
+
+
+
+1. List of all security fixes applied
+
+2. List of remaining risks (if any)
+
+3. Before/After security comparison
+
+4. Confirmation that:
+
+   - No cross-flat access is possible
+
+   - No IDOR exists
+
+   - RBAC enforced in service layer
+
+   - API is tenant-safe
+
+
+
+--------------------------------------------------
+
+🚨 IMPORTANT FINAL RULE
+
+--------------------------------------------------
+
+
+
+If any feature conflicts with security:
+
+→ SECURITY ALWAYS WINS
+
+Security hardening complete
+Build succeeds; 20/20 tests pass. Business logic (meal rate, balances, CRUD flows) is unchanged — only security, tenant isolation, and authorization were added.
+
+1. Security fixes applied
+Central tenant core
+Component	Purpose
+ITenantContext
+FlatId, DomainUserId, RoleType, IsManager from claims only (no config fallback)
+IFlatAuthorizationService
+GetCurrentFlatId(), EnsureCanRead(), EnsureCanWrite() / EnsureManager(), EnsureUserIsActiveMemberAsync()
+ForbiddenException / NotFoundException
+IDOR responses do not leak cross-tenant existence
+FlatAuthorizationService
+Application-layer enforcement
+Web (Messly.Web)
+TenantContext implements ITenantContext from flat_id, domain_user_id, ClaimTypes.Role
+Removed FlatContextService (config/default-flat fallback eliminated)
+Login: requires active FlatMember; sets claims from membership; lockoutOnFailure: true; no login without flat assignment
+All pages call services without passing FlatId
+Upsert DTOs no longer send FlatId from UI
+SafeErrorMessages.FromException() — no raw ex.Message to users
+Application services
+FlatId always from IFlatAuthorizationService.GetCurrentFlatId(), never from DTOs
+IDOR closed: GetByIdAndFlatAsync / GetByIdForUpdateAndFlatAsync / GetByIdWithDetailsAsync(id, flatId)
+Deletes require manager + flat-scoped load
+Creates/updates require manager (writes) or read access (lists/gets)
+FK integrity: PaidByUserId, deposit UserId, meal UserId validated via IsActiveMemberOfFlatAsync
+Repositories
+ExpenseRepository, DepositRepository, MealRepository, FlatMemberRepository — flat-scoped get/update methods
+API (Messly.Api)
+POST /api/v1/auth/login → JWT with flat_id, domain_user_id, role
+Routes: /api/v1/me/members, /me/expenses, /me/deposits, /me/dashboard (no URL flatId)
+JWT: issuer + audience + signing key from config (empty key in base appsettings.json; dev key in appsettings.Development.json)
+RBAC (service layer)
+Manager only	Member (read)
+Create/update/delete members, expenses, deposits
+List/get dashboard, reports, meals summary
+Meal daily save
+Settings save
+GenerateMonthlySummaryAsync
+2. Remaining risks
+Risk	Severity	Notes
+Single flat per user at login
+Low
+First active membership only; multi-flat switcher not in scope
+UI still shows Manager actions to Members
+Low
+Service rejects with ForbiddenException; buttons not hidden (no UI redesign)
+/health unauthenticated
+Low
+Consider restricting in production
+Production JWT key
+Ops
+Must set Jwt:Key via env/secrets (not dev default)
+MesslyDbContext in Login.razor
+Low
+Membership lookup in UI; could move to app service later
+Blazor circuit tampering
+Low
+Mitigated by server-side tenant checks on every service call
+API write endpoints
+N/A
+Still read-only API (by design)
+3. Before / after comparison
+Area	Before	After
+Tenant source
+FlatContext + config default
+Claims only via ITenantContext
+Cross-flat list/read
+Any flatId parameter
+Impossible — flat from tenant context
+IDOR (get/delete by id)
+Global id lookup
+Id and flatId required
+Create with wrong dto.FlatId
+Accepted
+Ignored; uses tenant flat
+Wrong UserId on expense/deposit/meal
+Accepted
+Rejected if not active member
+Role enforcement
+None
+Manager vs member in services
+API /{flatId}
+Client-controlled
+/me/* + JWT claims
+JWT validation
+No issuer/audience; hardcoded key fallback
+Issuer/audience validated; key from config
+Login without membership
+Allowed with default flat
+Rejected
+Error leakage
+ex.Message in UI
+Safe messages
+4. Confirmation
+Requirement	Status
+No cross-flat access
+Yes — all queries scoped to GetCurrentFlatId()
+No IDOR
+Yes — flat-scoped repository methods + NotFoundException
+RBAC in service layer
+Yes — EnsureManager() / EnsureCanRead()
+API tenant-safe
+Yes — JWT claims + /me/* routes
+No client-trusted FlatId
+Yes
+Member UserId validated
+Yes
+Business logic unchanged
+Yes
+How to verify locally
+Run Web: dotnet run --project src/Messly.Web/Messly.Web.csproj
+Login: manager@messly.local / Manager@123
+API login (dev): POST /api/v1/auth/login with same credentials, then GET /api/v1/me/members with Authorization: Bearer {token}
+Set production secrets: Jwt:Key, Jwt:Issuer, Jwt:Audience (and remove dev keys from production config).
+
+'Messly.Api.exe' (CoreCLR: DefaultDomain): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Private.CoreLib.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'F:\Code Synapse Technology LTD\Messly\src\Messly.Api\bin\Debug\net10.0\Messly.Api.dll'. Symbols loaded.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Runtime.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'c:\program files\microsoft visual studio\18\community\common7\ide\extensions\microsoft\managedprojectsystem\HotReload\net10.0\Microsoft.Extensions.DotNetDeltaApplier.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Linq.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Runtime.Loader.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Console.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Private.Uri.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.IO.Pipes.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Collections.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Runtime.InteropServices.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Collections.Concurrent.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Threading.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Threading.Overlapped.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Security.AccessControl.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Security.Principal.Windows.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Security.Claims.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'c:\program files\microsoft visual studio\18\community\common7\ide\extensions\microsoft\managedprojectsystem\HotReload\net6.0\Microsoft.AspNetCore.Watch.BrowserRefresh.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'c:\program files\microsoft visual studio\18\community\common7\ide\extensions\microsoft\web tools\projectsystem\net7.0\Microsoft.WebTools.ApiEndpointDiscovery.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\Extensions\Microsoft\Web Tools\Browser Link\Microsoft.WebTools.BrowserLink.Net.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Hosting.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.DependencyInjection.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Logging.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Diagnostics.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Configuration.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Http.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Routing.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.ComponentModel.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Features.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Configuration.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Primitives.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'F:\Code Synapse Technology LTD\Messly\src\Messly.Api\bin\Debug\net10.0\Messly.Infrastructure.dll'. Symbols loaded.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Http.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'F:\Code Synapse Technology LTD\Messly\src\Messly.Api\bin\Debug\net10.0\Messly.Application.dll'. Symbols loaded.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'F:\Code Synapse Technology LTD\Messly\src\Messly.Api\bin\Debug\net10.0\Messly.Domain.dll'. Symbols loaded.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Mvc.ApiExplorer.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'F:\Code Synapse Technology LTD\Messly\src\Messly.Api\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerGen.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Authentication.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'F:\Code Synapse Technology LTD\Messly\src\Messly.Api\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Authorization.Policy.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Hosting.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.HttpsPolicy.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Identity.Core.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Identity.Stores.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'F:\Code Synapse Technology LTD\Messly\src\Messly.Api\bin\Debug\net10.0\Microsoft.AspNetCore.Identity.EntityFrameworkCore.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'F:\Code Synapse Technology LTD\Messly\src\Messly.Api\bin\Debug\net10.0\Microsoft.EntityFrameworkCore.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Diagnostics.HealthChecks.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'F:\Code Synapse Technology LTD\Messly\src\Messly.Api\bin\Debug\net10.0\Swashbuckle.AspNetCore.Swagger.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'F:\Code Synapse Technology LTD\Messly\src\Messly.Api\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerUI.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\PrivateAssemblies\Runtime\Microsoft.VisualStudio.Debugger.Runtime.NetCoreApp.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+Step into: Stepping over non-user code 'Program.<>c__DisplayClass0_0..ctor'
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Hosting.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Hosting.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Configuration.EnvironmentVariables.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.FileProviders.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.FileProviders.Physical.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Configuration.FileExtensions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Options.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Logging.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Diagnostics.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Diagnostics.DiagnosticSource.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Configuration.Binder.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Configuration.Json.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Memory.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.IO.FileSystem.Watcher.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.ComponentModel.Primitives.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\Microsoft.Win32.Primitives.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Text.Json.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Text.Encoding.Extensions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.IO.Pipelines.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Configuration.UserSecrets.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Mvc.Core.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Logging.EventLog.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Logging.Configuration.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Options.ConfigurationExtensions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Logging.Console.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Logging.Debug.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Logging.EventSource.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Diagnostics.Tracing.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.DependencyInjection.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Server.Kestrel.Core.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Server.Kestrel.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Server.Kestrel.Transport.Quic.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Server.Kestrel.Transport.NamedPipes.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Net.Quic.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Net.Sockets.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Net.Primitives.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\Microsoft.Win32.Registry.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Server.IIS.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Server.IISIntegration.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Mvc.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Connections.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Hosting.Server.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.ObjectPool.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.HostFiltering.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.HttpOverrides.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Routing.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.ObjectModel.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Identity.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Linq.Expressions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Authentication.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Authentication.Cookies.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Authentication.Core.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.DataProtection.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.DataProtection.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Cryptography.Internal.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.WebEncoders.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Text.Encodings.Web.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'F:\Code Synapse Technology LTD\Messly\src\Messly.Api\bin\Debug\net10.0\FluentValidation.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'F:\Code Synapse Technology LTD\Messly\src\Messly.Api\bin\Debug\net10.0\FluentValidation.DependencyInjectionExtensions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'F:\Code Synapse Technology LTD\Messly\src\Messly.Api\bin\Debug\net10.0\Microsoft.OpenApi.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Authorization.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+The thread '.NET TP Worker' (13656) has exited with code 0 (0x0).
+
+The thread '.NET TP Worker' (25036) has exited with code 0 (0x0).
+
+The thread '.NET TP Worker' (22300) has exited with code 0 (0x0).
+
+The thread '.NET TP Worker' (13168) has exited with code 0 (0x0).
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Threading.Thread.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\System.Diagnostics.EventLog.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Collections.Specialized.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.ComponentModel.TypeConverter.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Threading.ThreadPool.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Reflection.Emit.Lightweight.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Reflection.Emit.ILGeneration.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.8\System.Reflection.Primitives.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Http.Extensions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.AspNetCore.Metadata.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+'Messly.Api.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.8\Microsoft.Extensions.Diagnostics.HealthChecks.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+
+Exception thrown: 'System.InvalidOperationException' in Microsoft.AspNetCore.Diagnostics.HealthChecks.dll
+
+An unhandled exception of type 'System.InvalidOperationException' occurred in Microsoft.AspNetCore.Diagnostics.HealthChecks.dll
+
+Unable to find the required services. Please add all the required services by calling 'IServiceCollection.AddHealthChecks' inside the call to 'ConfigureServices(...)' in the application startup code.
+
+
+
+The program '[9984] Messly.Api.exe' has exited with code 3221225786 (0xc000013a).
+
+The API maps /health without registering health checks. Adding AddHealthChecks in Messly.Api.
+
+The API was mapping /health without registering health checks. That mismatch triggers the InvalidOperationException you saw on startup.
+
+Fix: In Program.cs, register health checks before MapHealthChecks, matching the Web app:
+
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<MesslyDbContext>("database");
+The EF Core health checks package was already referenced; only the service registration was missing.
+
+Rebuild succeeded. Run Messly.Api again from Visual Studio — it should start normally. After it’s up, check https://localhost:<port>/health and Swagger for login and /api/v1/me/* endpoints.
+
+Note: If the database hasn’t been migrated yet, run Messly.Web once in Development (it runs migrations and seed), or apply migrations manually before testing API login.
+
+API is running; /health reports Unhealthy—likely the database health check. Investigating configuration and startup.
+
+Web migrates and seeds the database on startup in Development; the API doesn't, so the DB health check fails when only the API runs. Adding the same Development bootstrap to the API.
+
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<MesslyDbContext>();
+    var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    await db.Database.MigrateAsync();
+    await DevDataSeeder.SeedAsync(db, config);
+    await IdentityDataSeeder.SeedAsync(scope.ServiceProvider, config);
+    app.UseSwagger();
+API is up; Swagger looks correct. /health showing Unhealthy is almost certainly the database check: the API could reach SQL Server, but the schema wasn’t migrated when you only ran the API (the Web app does that on startup in Development).sssss
+
+Change made: In Development, the API now runs the same startup steps as Messly.Web:
+
+MigrateAsync() — create/update the database
+DevDataSeeder + IdentityDataSeeder — dev flat and manager@messly.local
+What to do: Stop the running API in Visual Studio, then start it again. Refresh https://localhost:7106/health — you should see Healthy.
+
+Quick Swagger test
+
+POST /api/v1/auth/login with:
+{ "email": "manager@messly.local", "password": "Manager@123" }
+Copy accessToken from the response.
+Click Authorize, enter: Bearer <your-token>
+Try GET /api/v1/me/members (and the other /me/* endpoints).
+If /health is still Unhealthy after a restart, check that SQL Server LocalDB is installed and running ((localdb)\mssqllocaldb in appsettings.json). Say if you want a more detailed health response in Development (e.g. which check failed).

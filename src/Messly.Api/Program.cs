@@ -44,11 +44,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<MesslyDbContext>("database");
 
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<MesslyDbContext>();
+    var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    await db.Database.MigrateAsync();
+    await DevDataSeeder.SeedAsync(db, config);
+    await IdentityDataSeeder.SeedAsync(scope.ServiceProvider, config);
+
     app.UseSwagger();
     app.UseSwaggerUI();
 }
